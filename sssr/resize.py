@@ -29,12 +29,12 @@ def resize(image, dxyz, order=3):
 def _calc_old_fov(old_shape):
     """Calculates the FOV of the original image.
 
-    Suppose the left boundaries are at 0, then the first voxel is at
-    (0.5, 0.5, 0.5). Assume the step size is 1.
+    Suppose the left boundaries are at (-0.5, -0.5, -0.5), then the first voxel
+    is at (0, 0, 0). Assume the step size is 1.
 
     """
     step_size = 1
-    lefts = (0, 0, 0)
+    lefts = (-0.5, -0.5, -0.5)
     rights = tuple(l + s * step_size for l, s in zip(lefts, old_shape))
     return lefts, rights
 
