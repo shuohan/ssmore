@@ -2,7 +2,44 @@
 
 """
 import numpy as np
+import torch
+import torch.nn.functional as F
 from scipy.ndimage import map_coordinates
+
+
+def resize_pt(image, dxyz):
+    old_fov = _calc_old_fov_no_extra(image.shape[2:])
+    new_shape = _calc_new_shape_no_extra(image.shape[2:], dxyz)
+    new_fov = _calc_new_fov_no_extra(new_shape, dxyz)
+    indices = _calc_sampling_indices_no_extra_pt(old_fov, new_fov, dxyz)
+    ind_shape = [image.shape[0]] + [1] * (indices.ndim - 1)
+    indices = indices.repeat(ind_shape)
+    result = F.grid_sample(image, indices, align_corners=True)
+    return result
+
+
+def _calc_old_fov_no_extra(old_shape):
+    step_size = 1
+    fov = tuple((s - 1) * step_size for s in old_shape)
+    return fov
+
+
+def _calc_new_fov_no_extra(new_shape, dxyz):
+    fov = tuple((s - 1) * d for s, d in zip(new_shape, dxyz))
+    return fov
+
+
+def _calc_new_shape_no_extra(old_shape, dxyz):
+    return tuple(np.floor((s - 1) / d) + 1 for s, d in zip(old_shape, dxyz))
+
+
+def _calc_sampling_indices_no_extra_pt(old_fov, new_fov, dxyz):
+    indices = [torch.arange(0, f + d/4, d) for f, d in zip(new_fov, dxyz)]
+    indices = [ind / f * 2 - 1 for ind, f in zip(indices, old_fov)] # map into [-1, 1]
+    grid = torch.meshgrid(*indices)
+    grid = [g[None, ..., None] for g in grid]
+    grid = [grid[1], grid[0], *grid[2:]]
+    return torch.cat(grid, -1)
 
 
 def resize(image, dxyz, order=3):
