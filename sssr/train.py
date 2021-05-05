@@ -61,10 +61,12 @@ class Trainer(Subject):
         batch = self.sampler.get_patches(indices)
         self._names = batch.name
 
-        self._blur = F.conv2d(batch.data, self.slice_profile)
+        self._extracted = batch.data
+        self._blur = F.conv2d(self._extracted, self.slice_profile)
         self._lr = resize_pt(self._blur, (self.scale0 * self.scale1, 1))
         self._input = resize_pt(self._lr, (1 / self.scale0, 1))
-        self._hr = self._crop_hr(batch.data)
+        self._input_interp = self._interp_input(self._input)
+        self._hr_crop = self._crop_hr(self._extracted)
 
         # print('blur', self._blur.shape)
         # print('lr', self._lr.shape)
@@ -76,7 +78,7 @@ class Trainer(Subject):
 
         # print('output', self._output.shape)
 
-        self._loss = self.loss_func(self._output, self._hr)
+        self._loss = self.loss_func(self._output, self._hr_crop)
         self._loss.backward()
         self.optim.step()
 
@@ -90,10 +92,34 @@ class Trainer(Subject):
         result = result[:, :, crop0 : -crop0, crop1 : -crop1]
         return result
 
+    def _interp_input(self, batch):
+        crop = 2 * (self.net.num_blocks + 1)
+        result = batch[:, :, crop : -crop, crop : -crop]
+        result = resize_pt(result, (1 / self.scale1, 1))
+        pad = self.scale1 - 1
+        result = F.pad(result, (0, 0, 0, pad), mode='replicate')
+        return result
+
     def cont(self, ckpt):
         self.net.load_state_dict(ckpt['model_state_dict'])
         self.optim.load_state_dict(ckpt['optim_state_dict'])
         self.train(start_ind=ckpt['epoch'])
+
+    @property
+    def extracted_cuda(self):
+        return self._extracted
+
+    @property
+    def extracted(self):
+        return NamedData(self._names, self._extracted.detach().cpu())
+
+    @property
+    def blur_cuda(self):
+        return self._blur
+
+    @property
+    def blur(self):
+        return NamedData(self._names, self._blur.detach().cpu())
 
     @property
     def lr_cuda(self):
@@ -104,12 +130,12 @@ class Trainer(Subject):
         return NamedData(self._names, self._lr.detach().cpu())
 
     @property
-    def hr_cuda(self):
-        return self._hr
+    def hr_crop_cuda(self):
+        return self._hr_crop
 
     @property
-    def hr(self):
-        return NamedData(self._names, self._hr.detach().cpu())
+    def hr_crop(self):
+        return NamedData(self._names, self._hr_crop.detach().cpu())
 
     @property
     def input_cuda(self):
@@ -118,6 +144,14 @@ class Trainer(Subject):
     @property
     def input(self):
         return NamedData(self._names, self._input.detach().cpu())
+
+    @property
+    def input_interp_cuda(self):
+        return self._input_interp
+
+    @property
+    def input_interp(self):
+        return NamedData(self._names, self._input_interp.detach().cpu())
 
     @property
     def output_cuda(self):

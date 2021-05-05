@@ -6,7 +6,7 @@ desc = 'Self-supervised super-resolution.'
 parser = argparse.ArgumentParser(description=desc)
 parser.add_argument('-i', '--image')
 parser.add_argument('-o', '--output-dir')
-parser.add_argument('-p', '--patch-size', default=[48, 48], type=int, nargs=2)
+parser.add_argument('-p', '--patch-size', default=[40, 40], type=int, nargs=2)
 parser.add_argument('-s', '--slice-profile', default='gaussian')
 parser.add_argument('-d', '--num-blocks', default=8, type=int)
 parser.add_argument('-w', '--num-channels', default=256, type=int)
@@ -77,7 +77,8 @@ logger = EpochLogger(log_filename)
 printer = EpochPrinter(print_sep=False)
 queue.register(logger)
 queue.register(printer)
-image_saver = ImageSaver(image_dirname, attrs=['lr', 'input', 'output', 'hr'],
+attrs =  ['extracted', 'blur', 'lr', 'input_interp', 'output', 'hr_crop']
+image_saver = ImageSaver(image_dirname, attrs=attrs,
                          step=args.image_save_step, zoom=4, ordered=True,
                          file_struct='epoch/sample', save_type='png_norm')
 trainer.register(queue)
