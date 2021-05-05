@@ -32,7 +32,7 @@ def save_args(args, filename):
     for arg in vars(args):
         result[arg] = getattr(args, arg)
     with open(filename, 'w') as jfile:
-        json.dump(result, jfile, pretty=4)
+        json.dump(result, jfile, indent=4)
 
 
 def calc_edsr_patch_size(lr_patch_size, sp_len, scale1):

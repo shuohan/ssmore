@@ -101,7 +101,7 @@ class Trainer(Subject):
 
     @property
     def lr(self):
-        return NamedData(self._names, self._lr.detach().cpu().numpy())
+        return NamedData(self._names, self._lr.detach().cpu())
 
     @property
     def hr_cuda(self):
@@ -109,7 +109,7 @@ class Trainer(Subject):
 
     @property
     def hr(self):
-        return NamedData(self._names, self._hr.detach().cpu().numpy())
+        return NamedData(self._names, self._hr.detach().cpu())
 
     @property
     def input_cuda(self):
@@ -117,7 +117,7 @@ class Trainer(Subject):
 
     @property
     def input(self):
-        return NamedData(self._names, self._input.detach().cpu().numpy())
+        return NamedData(self._names, self._input.detach().cpu())
 
     @property
     def output_cuda(self):
@@ -125,4 +125,8 @@ class Trainer(Subject):
 
     @property
     def output(self):
-        return NamedData(self._names, self._output.detach().cpu().numpy())
+        return NamedData(self._names, self._output.detach().cpu())
+
+    @property
+    def loss(self):
+        return self._loss.item()

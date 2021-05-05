@@ -5,7 +5,7 @@ import argparse
 desc = 'Self-supervised super-resolution.'
 parser = argparse.ArgumentParser(description=desc)
 parser.add_argument('-i', '--image')
-parser.add_argument('-o', '--output-directory')
+parser.add_argument('-o', '--output-dir')
 parser.add_argument('-p', '--patch-size', default=[48, 48], type=int, nargs=2)
 parser.add_argument('-s', '--slice-profile', default='gaussian')
 parser.add_argument('-d', '--num-blocks', default=8, type=int)
@@ -14,6 +14,7 @@ parser.add_argument('-r', '--residual-scale', default=0.1, type=float)
 parser.add_argument('-l', '--learning-rate', default=0.0001, type=float)
 parser.add_argument('-b', '--batch-size', default=16, type=int)
 parser.add_argument('-e', '--num-epochs', default=100, type=int)
+parser.add_argument('-I', '--image-save-step', default=50, type=int)
 args = parser.parse_args()
 
 
@@ -25,12 +26,19 @@ from torch.optim import AdamW
 
 from sssrlib.patches import Patches
 from sssrlib.sample import Sampler
+from ptxl.save import ImageSaver 
+from ptxl.log import EpochLogger, EpochPrinter, DataQueue
 
 from sssr.train import Trainer
 from sssr.edsr import EDSR
 from sssr.utils import calc_gaussian_slice_profie, get_axis_order, save_args
 from sssr.utils import calc_edsr_patch_size, L1SobelLoss
 
+
+Path(args.output_dir).mkdir(parents=True)
+image_dirname = Path(args.output_dir, 'patches')
+log_filename = Path(args.output_dir, 'log.csv')
+args_filename = Path(args.output_dir, 'config.json')
 
 obj = nib.load(args.image)
 voxel_size = obj.header.get_zooms()
@@ -39,8 +47,6 @@ voxel_size = voxel_size / voxel_size[x]
 scale = voxel_size[z]
 args.scale1 = int(scale)
 args.scale0 = scale / float(args.scale1)
-
-print(args)
 
 if args.slice_profile == 'gaussian':
     slice_profile = calc_gaussian_slice_profie(scale)
@@ -56,6 +62,8 @@ image = obj.get_fdata(dtype=np.float32)
 patches = Patches(patch_size, image, voxel_size=voxel_size).cuda()
 sampler = Sampler(patches) # uniform sampling
 
+save_args(args, args_filename)
+
 net = EDSR(num_blocks=args.num_blocks, num_channels=args.num_channels,
            scale=args.scale1, res_scale=args.residual_scale).cuda()
 optim = AdamW(net.parameters(), lr=args.learning_rate)
@@ -64,4 +72,14 @@ loss_func = L1SobelLoss().cuda()
 trainer = Trainer(sampler, slice_profile, args.scale0, args.scale1,
                   net, optim, loss_func, batch_size=args.batch_size,
                   num_epochs=args.num_epochs)
+queue = DataQueue(['loss'])
+logger = EpochLogger(log_filename)
+printer = EpochPrinter(print_sep=False)
+queue.register(logger)
+queue.register(printer)
+image_saver = ImageSaver(image_dirname, attrs=['lr', 'input', 'output', 'hr'],
+                         step=args.image_save_step, zoom=4, ordered=True,
+                         file_struct='epoch/sample', save_type='png_norm')
+trainer.register(queue)
+trainer.register(image_saver)
 trainer.train()
