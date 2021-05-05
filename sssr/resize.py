@@ -14,6 +14,7 @@ def resize_pt(image, dxyz):
     indices = _calc_sampling_indices_no_extra_pt(old_fov, new_fov, dxyz)
     ind_shape = [image.shape[0]] + [1] * (indices.ndim - 1)
     indices = indices.repeat(ind_shape)
+    indices = indices.to(image)
     result = F.grid_sample(image, indices, align_corners=True)
     return result
 
