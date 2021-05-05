@@ -21,6 +21,7 @@ class Trainer(Subject):
         self._num_epochs = num_epochs
         self._epoch_ind = -1
         self._batch_ind = -1
+        self._intensity_max = sampler.patches.image.max()
 
     @property
     def batch_size(self):
@@ -105,13 +106,19 @@ class Trainer(Subject):
         self.optim.load_state_dict(ckpt['optim_state_dict'])
         self.train(start_ind=ckpt['epoch'])
 
+    def _convert_data(self, data):
+        result = data / self._intensity_max
+        result = result.detach().cpu()
+        result = NamedData(self._names, result)
+        return result
+
     @property
     def extracted_cuda(self):
         return self._extracted
 
     @property
     def extracted(self):
-        return NamedData(self._names, self._extracted.detach().cpu())
+        return self._convert_data(self._extracted)
 
     @property
     def blur_cuda(self):
@@ -119,7 +126,7 @@ class Trainer(Subject):
 
     @property
     def blur(self):
-        return NamedData(self._names, self._blur.detach().cpu())
+        return self._convert_data(self._blur)
 
     @property
     def lr_cuda(self):
@@ -127,7 +134,7 @@ class Trainer(Subject):
 
     @property
     def lr(self):
-        return NamedData(self._names, self._lr.detach().cpu())
+        return self._convert_data(self._lr)
 
     @property
     def hr_crop_cuda(self):
@@ -135,7 +142,7 @@ class Trainer(Subject):
 
     @property
     def hr_crop(self):
-        return NamedData(self._names, self._hr_crop.detach().cpu())
+        return self._convert_data(self._hr_crop)
 
     @property
     def input_cuda(self):
@@ -143,7 +150,7 @@ class Trainer(Subject):
 
     @property
     def input(self):
-        return NamedData(self._names, self._input.detach().cpu())
+        return self._convert_data(self._input)
 
     @property
     def input_interp_cuda(self):
@@ -151,7 +158,7 @@ class Trainer(Subject):
 
     @property
     def input_interp(self):
-        return NamedData(self._names, self._input_interp.detach().cpu())
+        return self._convert_data(self._input_interp)
 
     @property
     def output_cuda(self):
@@ -159,7 +166,7 @@ class Trainer(Subject):
 
     @property
     def output(self):
-        return NamedData(self._names, self._output.detach().cpu())
+        return self._convert_data(self._output)
 
     @property
     def loss(self):

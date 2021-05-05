@@ -12,7 +12,7 @@ parser.add_argument('-d', '--num-blocks', default=8, type=int)
 parser.add_argument('-w', '--num-channels', default=256, type=int)
 parser.add_argument('-r', '--residual-scale', default=0.1, type=float)
 parser.add_argument('-l', '--learning-rate', default=0.0001, type=float)
-parser.add_argument('-b', '--batch-size', default=16, type=int)
+parser.add_argument('-b', '--batch-size', default=100, type=int)
 parser.add_argument('-e', '--num-epochs', default=100, type=int)
 parser.add_argument('-I', '--image-save-step', default=50, type=int)
 args = parser.parse_args()
@@ -80,7 +80,7 @@ queue.register(printer)
 attrs =  ['extracted', 'blur', 'lr', 'input_interp', 'output', 'hr_crop']
 image_saver = ImageSaver(image_dirname, attrs=attrs,
                          step=args.image_save_step, zoom=4, ordered=True,
-                         file_struct='epoch/sample', save_type='png_norm')
+                         file_struct='epoch/sample', save_type='png')
 trainer.register(queue)
 trainer.register(image_saver)
 trainer.train()
