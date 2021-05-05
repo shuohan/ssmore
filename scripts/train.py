@@ -23,6 +23,7 @@ import nibabel as nib
 import numpy as np
 from pathlib import Path
 from torch.optim import AdamW
+from improc3d import permute3d
 
 from sssrlib.patches import Patches
 from sssrlib.sample import Sampler
@@ -39,6 +40,7 @@ Path(args.output_dir).mkdir(parents=True)
 image_dirname = Path(args.output_dir, 'patches')
 log_filename = Path(args.output_dir, 'log.csv')
 args_filename = Path(args.output_dir, 'config.json')
+result_filename = Path(args.output_dir, 'result.nii.gz')
 
 obj = nib.load(args.image)
 voxel_size = obj.header.get_zooms()
@@ -84,3 +86,10 @@ image_saver = ImageSaver(image_dirname, attrs=attrs,
 trainer.register(queue)
 trainer.register(image_saver)
 trainer.train()
+
+result = trainer.predict().detach().cpu().numpy().squeeze()
+result = permute3d(result, x=patches.ix, y=patches.iy, z=patches.iz)[0]
+scale_mat = np.diag(np.array([1, 1, 1 / scale, 1])[[x, y, z, 3]])
+affine = obj.affine @ scale_mat
+out = nib.Nifti1Image(result, affine, obj.header)
+out.to_filename(result_filename)

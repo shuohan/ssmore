@@ -1,4 +1,4 @@
-import math
+import torch
 import torch.nn.functional as F
 from ptxl.observer import Subject, Observer, SubjectObserver
 from ptxl.utils import NamedData
@@ -105,6 +105,22 @@ class Trainer(Subject):
         self.net.load_state_dict(ckpt['model_state_dict'])
         self.optim.load_state_dict(ckpt['optim_state_dict'])
         self.train(start_ind=ckpt['epoch'])
+
+    def predict(self):
+        image = self.sampler.patches.image[None, None, ...]
+        padding = (self.net.num_blocks + 1) * 2
+        padding = (padding, padding, padding, padding)
+
+        result = list()
+        with torch.no_grad():
+            for i in range(image.shape[2]):
+                batch = image[:, :, i, ...].permute(0, 1, 3, 2)
+                interp = resize_pt(batch, (1/ self.scale0, 1))
+                padded = F.pad(interp, padding, mode='replicate')
+                sr = self.net(padded)
+                result.append(sr.permute(0, 1, 3, 2))
+        result = torch.stack(result, dim=2)
+        return result
 
     def _convert_data(self, data):
         result = data / self._intensity_max
