@@ -111,15 +111,28 @@ class Trainer(Subject):
         padding = (self.net.num_blocks + 1) * 2
         padding = (padding, padding, padding, padding)
 
-        result = list()
+        result0 = list()
         with torch.no_grad():
             for i in range(image.shape[2]):
                 batch = image[:, :, i, ...].permute(0, 1, 3, 2)
                 interp = resize_pt(batch, (1/ self.scale0, 1))
                 padded = F.pad(interp, padding, mode='replicate')
                 sr = self.net(padded)
-                result.append(sr.permute(0, 1, 3, 2))
-        result = torch.stack(result, dim=2)
+                result0.append(sr.permute(0, 1, 3, 2))
+        result0 = torch.stack(result0, dim=2)
+
+        result1 = list()
+        with torch.no_grad():
+            for i in range(image.shape[3]):
+                batch = image[:, :, :, i, :].permute(0, 1, 3, 2)
+                interp = resize_pt(batch, (1/ self.scale0, 1))
+                padded = F.pad(interp, padding, mode='replicate')
+                sr = self.net(padded)
+                result1.append(sr.permute(0, 1, 3, 2))
+        result1 = torch.stack(result1, dim=3)
+
+        result = (result1 + result0) / 2
+
         return result
 
     def _convert_data(self, data):
