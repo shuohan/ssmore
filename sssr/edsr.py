@@ -55,6 +55,8 @@ class EDSR(nn.Module):
             self.add_module('block%d' % i, ResBlock(num_channels, res_scale))
         self.up = Upsample(num_channels, scale)
 
+        self.crop = 2 * (self.num_blocks + 1)
+
     def forward(self, x):
         out = self.conv(x)
         for i in range(self.num_blocks):

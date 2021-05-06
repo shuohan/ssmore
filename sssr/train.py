@@ -72,7 +72,8 @@ class Trainer(Subject):
         # print('blur', self._blur.shape)
         # print('lr', self._lr.shape)
         # print('input', self._input.shape)
-        # print('hr', self._hr.shape)
+        # print('input_interp', self._input_interp.shape)
+        # print('hr', self._hr_crop.shape)
 
         self.optim.zero_grad()
         self._output = self.net(self._input)
@@ -88,13 +89,13 @@ class Trainer(Subject):
         result = batch[:, :, crop : -crop, ...]
         size = self._input.shape[2] * self.scale1
         result = result[:, :, :size, ...]
-        crop1 = 2 * (self.net.num_blocks + 1)
+        crop1 = self.net.crop
         crop0 = self.scale1 * crop1
         result = result[:, :, crop0 : -crop0, crop1 : -crop1]
         return result
 
     def _interp_input(self, batch):
-        crop = 2 * (self.net.num_blocks + 1)
+        crop = self.net.crop
         result = batch[:, :, crop : -crop, crop : -crop]
         result = resize_pt(result, (1 / self.scale1, 1))
         pad = self.scale1 - 1
@@ -108,7 +109,7 @@ class Trainer(Subject):
 
     def predict(self):
         image = self.sampler.patches.image[None, None, ...]
-        padding = (self.net.num_blocks + 1) * 2
+        padding = self.net.crop
         padding = (padding, padding, padding, padding)
 
         result0 = list()

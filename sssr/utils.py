@@ -35,7 +35,7 @@ def save_args(args, filename):
         json.dump(result, jfile, indent=4)
 
 
-def calc_edsr_patch_size(lr_patch_size, sp_len, scale1):
+def calc_patch_size(lr_patch_size, sp_len, scale1):
     ps0 = lr_patch_size[0] * scale1 + sp_len
     ps1 = lr_patch_size[1]
     return [ps0, ps1, 1]

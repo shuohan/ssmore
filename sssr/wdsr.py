@@ -30,20 +30,27 @@ class WDSRB(nn.Module):
         init.ones_(self.conv1.weight_g)
         init.zeros_(self.conv1.bias)
 
-        skip = []
-        skip_ks = 2 * (self.num_blocks + 1) + 1
+        skip_ks = 5
         self.skip_conv = weight_norm(nn.Conv2d(1, out_channels, skip_ks))
         init.ones_(self.skip_conv.weight_g)
         init.zeros_(self.skip_conv.bias)
+
+        self.crop = self.num_blocks + 1
+        self._skip_crop = self.crop - (skip_ks - 1) // 2
 
     def forward(self, x):
         out = self.conv0(x)
         for i in range(self.num_blocks):
             out = getattr(self, 'block%d' % i)(out)
         out = self.conv1(out)
-        out = out + self.skip_conv(x)
+        out = out + self._apply_skip_conv(x)
         out = pixel_shuffle(out, self.scale)
         return out
+
+    def _apply_skip_conv(self, x):
+        skip = self.skip_conv(x)
+        return skip[..., self._skip_crop : -self._skip_crop,
+                    self._skip_crop : -self._skip_crop]
 
 
 class Block(nn.Module):

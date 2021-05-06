@@ -15,6 +15,7 @@ parser.add_argument('-l', '--learning-rate', default=0.0001, type=float)
 parser.add_argument('-b', '--batch-size', default=100, type=int)
 parser.add_argument('-e', '--num-epochs', default=100, type=int)
 parser.add_argument('-I', '--image-save-step', default=50, type=int)
+parser.add_argument('-W', '--num-channels-multiplier', default=8, type=int)
 args = parser.parse_args()
 
 
@@ -32,8 +33,9 @@ from ptxl.log import EpochLogger, EpochPrinter, DataQueue
 
 from sssr.train import Trainer
 from sssr.edsr import EDSR
+from sssr.wdsr import WDSRB
 from sssr.utils import calc_gaussian_slice_profie, get_axis_order, save_args
-from sssr.utils import calc_edsr_patch_size, L1SobelLoss
+from sssr.utils import calc_patch_size, L1SobelLoss
 
 
 Path(args.output_dir).mkdir(parents=True)
@@ -58,7 +60,7 @@ slice_profile = slice_profile.squeeze()[None, None, :, None]
 slice_profile = torch.tensor(slice_profile).float().cuda()
 
 sp_len = slice_profile.shape[2]
-patch_size = calc_edsr_patch_size(args.patch_size, sp_len, args.scale1)
+patch_size = calc_patch_size(args.patch_size, sp_len, args.scale1)
 args.hr_patch_size = patch_size
 image = obj.get_fdata(dtype=np.float32)
 patches = Patches(patch_size, image, voxel_size=voxel_size).cuda()
@@ -66,8 +68,11 @@ sampler = Sampler(patches) # uniform sampling
 
 save_args(args, args_filename)
 
-net = EDSR(num_blocks=args.num_blocks, num_channels=args.num_channels,
-           scale=args.scale1, res_scale=args.residual_scale).cuda()
+# net = EDSR(num_blocks=args.num_blocks, num_channels=args.num_channels,
+#            scale=args.scale1, res_scale=args.residual_scale).cuda()
+net = WDSRB(args.scale1, num_channels=args.num_channels,
+            num_chan_multiplier=args.num_channels_multiplier,
+            num_blocks=args.num_blocks).cuda()
 optim = AdamW(net.parameters(), lr=args.learning_rate)
 loss_func = L1SobelLoss().cuda()
 
