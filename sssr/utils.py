@@ -24,7 +24,7 @@ def get_axis_order(voxel_size):
     z = np.argmax(voxel_size)
     xy = list(range(len(voxel_size)))
     xy.remove(z)
-    return xy[0], xy[1], z
+    return int(xy[0]), int(xy[1]), int(z)
 
 
 def save_args(args, filename):

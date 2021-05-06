@@ -21,7 +21,6 @@ class Trainer(Subject):
         self._num_epochs = num_epochs
         self._epoch_ind = -1
         self._batch_ind = -1
-        self._intensity_max = sampler.patches.image.max()
 
     @property
     def batch_size(self):
@@ -137,7 +136,8 @@ class Trainer(Subject):
         return result
 
     def _convert_data(self, data):
-        result = data / self._intensity_max
+        # result = data / self._intensity_max
+        result = data
         result = result.detach().cpu()
         result = NamedData(self._names, result)
         return result
