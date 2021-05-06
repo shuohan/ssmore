@@ -16,7 +16,7 @@ class WDSRB(nn.Module):
         self.num_chan_multiplier = num_chan_multiplier
         self.num_blocks = num_blocks
 
-        self.conv0 = weight_norm(nn.Conv2d(1, num_channels, 3))
+        self.conv0 = weight_norm(nn.Conv2d(1, num_channels, 3, padding=1))
         init.ones_(self.conv0.weight_g)
         init.zeros_(self.conv0.bias)
 
@@ -26,31 +26,34 @@ class WDSRB(nn.Module):
             self.add_module('block%d' % i, block)
         
         out_channels = scale
-        self.conv1 = weight_norm(nn.Conv2d(num_channels, out_channels, 1))
+        conv = nn.Conv2d(num_channels, out_channels, 1)
+        self.conv1 = weight_norm(conv)
         init.ones_(self.conv1.weight_g)
         init.zeros_(self.conv1.bias)
 
         skip_ks = 5
-        self.skip_conv = weight_norm(nn.Conv2d(1, out_channels, skip_ks))
+        conv = nn.Conv2d(1, out_channels, skip_ks, padding=(skip_ks - 1) // 2)
+        self.skip_conv = weight_norm(conv)
         init.ones_(self.skip_conv.weight_g)
         init.zeros_(self.skip_conv.bias)
 
-        self.crop = self.num_blocks + 1
-        self._skip_crop = self.crop - (skip_ks - 1) // 2
+        # self.crop = self.num_blocks + 1
+        # self._skip_crop = self.crop - (skip_ks - 1) // 2
 
     def forward(self, x):
         out = self.conv0(x)
         for i in range(self.num_blocks):
             out = getattr(self, 'block%d' % i)(out)
         out = self.conv1(out)
-        out = out + self._apply_skip_conv(x)
+        # out = out + self._apply_skip_conv(x)
+        out = out + self.skip_conv(x)
         out = pixel_shuffle(out, self.scale)
         return out
 
-    def _apply_skip_conv(self, x):
-        skip = self.skip_conv(x)
-        return skip[..., self._skip_crop : -self._skip_crop,
-                    self._skip_crop : -self._skip_crop]
+    # def _apply_skip_conv(self, x):
+    #     skip = self.skip_conv(x)
+    #     return skip[..., self._skip_crop : -self._skip_crop,
+    #                 self._skip_crop : -self._skip_crop]
 
 
 class Block(nn.Module):
@@ -71,7 +74,8 @@ class Block(nn.Module):
         init.ones_(self.conv1.weight_g)
         init.zeros_(self.conv1.bias)
 
-        self.conv2 = weight_norm(nn.Conv2d(out_channels, num_channels, 3))
+        conv = nn.Conv2d(out_channels, num_channels, 3, padding=1)
+        self.conv2 = weight_norm(conv)
         init.constant_(self.conv2.weight_g, res_scale)
         init.zeros_(self.conv2.bias)
 
@@ -80,5 +84,6 @@ class Block(nn.Module):
         out = self.relu(out)
         out = self.conv1(out)
         out = self.conv2(out)
-        out = out + x[:, :, 1:-1, 1:-1]
+        out = out + x
+        # out = out + x[:, :, 1:-1, 1:-1]
         return out

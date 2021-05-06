@@ -88,14 +88,15 @@ class Trainer(Subject):
         result = batch[:, :, crop : -crop, ...]
         size = self._input.shape[2] * self.scale1
         result = result[:, :, :size, ...]
-        crop1 = self.net.crop
-        crop0 = self.scale1 * crop1
-        result = result[:, :, crop0 : -crop0, crop1 : -crop1]
+        # crop1 = self.net.crop
+        # crop0 = self.scale1 * crop1
+        # result = result[:, :, crop0 : -crop0, crop1 : -crop1]
         return result
 
     def _interp_input(self, batch):
-        crop = self.net.crop
-        result = batch[:, :, crop : -crop, crop : -crop]
+        # crop = self.net.crop
+        # result = batch[:, :, crop : -crop, crop : -crop]
+        result = batch
         result = resize_pt(result, (1 / self.scale1, 1))
         pad = self.scale1 - 1
         result = F.pad(result, (0, 0, 0, pad), mode='replicate')
@@ -108,7 +109,8 @@ class Trainer(Subject):
 
     def predict(self):
         image = self.sampler.patches.image[None, None, ...]
-        padding = self.net.crop
+        # padding = self.net.crop
+        padding = 0
         padding = (padding, padding, padding, padding)
 
         result0 = list()
