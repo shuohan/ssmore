@@ -7,6 +7,8 @@ This code is modified from
 """
 from torch import nn
 
+from .utils import pixel_shuffle
+
 
 class ResBlock(nn.Module):
     def __init__(self, num_channels, res_scale=0.1):
@@ -35,17 +37,8 @@ class Upsample(nn.Module):
 
     def forward(self, x):
         out = self.conv0(x)
-        out = self._pixel_shuffle(out)
+        out = pixel_shuffle(out, self.scale)
         out = self.conv1(out)
-        return out
-
-    def _pixel_shuffle(self, x):
-        """https://gist.github.com/davidaknowles/6e95a643adaf3960d1648a6b369e9d0b"""
-        num_batches, num_channels, nx, ny = x.shape
-        num_channels = num_channels // self.scale
-        out = x.contiguous().view(num_batches, num_channels, self.scale, nx, ny)
-        out = out.permute(0, 1, 3, 2, 4).contiguous()
-        out = out.view(num_batches, num_channels, nx * self.scale, ny)
         return out
 
 

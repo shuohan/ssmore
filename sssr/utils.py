@@ -41,6 +41,16 @@ def calc_edsr_patch_size(lr_patch_size, sp_len, scale1):
     return [ps0, ps1, 1]
 
 
+def pixel_shuffle(x, scale):
+    """https://gist.github.com/davidaknowles/6e95a643adaf3960d1648a6b369e9d0b"""
+    num_batches, num_channels, nx, ny = x.shape
+    num_channels = num_channels // scale
+    out = x.contiguous().view(num_batches, num_channels, scale, nx, ny)
+    out = out.permute(0, 1, 3, 2, 4).contiguous()
+    out = out.view(num_batches, num_channels, nx * scale, ny)
+    return out
+
+
 class L1SobelLoss(nn.Module):
     def __init__(self, sobel_lambda=0.5, l1_lambda=0.5, eps=1e-6):
         super().__init__()
