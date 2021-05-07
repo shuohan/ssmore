@@ -17,7 +17,7 @@ def test_wdsr():
     #                 scale=2, num_residual_units=64, num_blocks=4,
     #                 width_multiplier=2)
     # net = MODEL(params).cuda()
-    net = WDSRB(scale=4, num_blocks=3).cuda()
+    net = WDSRB(scale=4, num_blocks=3, use_padding=True).cuda()
     x = torch.rand(1, 1, 64, 64).cuda()
     print(x.shape, x.dtype)
     dot = make_dot(x, net)

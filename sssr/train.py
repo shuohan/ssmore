@@ -83,23 +83,18 @@ class Trainer(Subject):
         self._loss.backward()
         self.optim.step()
 
-    def _crop_hr(self, batch):
+    def _crop_hr(self, hr_batch):
         crop = (self.slice_profile.shape[2] - 1) // 2
-        result = batch[:, :, crop : -crop, ...]
+        result = hr_batch[:, :, crop : -crop, ...]
         size = self._input.shape[2] * self.scale1
         result = result[:, :, :size, ...]
-        # crop1 = self.net.crop
-        # crop0 = self.scale1 * crop1
-        # result = result[:, :, crop0 : -crop0, crop1 : -crop1]
+        result = self.net.crop(result)
         return result
 
-    def _interp_input(self, batch):
-        # crop = self.net.crop
-        # result = batch[:, :, crop : -crop, crop : -crop]
-        result = batch
-        result = resize_pt(result, (1 / self.scale1, 1))
-        pad = self.scale1 - 1
-        result = F.pad(result, (0, 0, 0, pad), mode='replicate')
+    def _interp_input(self, input_batch):
+        result = resize_pt(input_batch, (1 / self.scale1, 1))
+        result = F.pad(result, (0, 0, 0, self.scale1 - 1), mode='replicate')
+        result = self.net.crop(result)
         return result
 
     def cont(self, ckpt):
@@ -107,10 +102,9 @@ class Trainer(Subject):
         self.optim.load_state_dict(ckpt['optim_state_dict'])
         self.train(start_ind=ckpt['epoch'])
 
-    def predict(self):
-        image = self.sampler.patches.image[None, None, ...]
-        # padding = self.net.crop
-        padding = 0
+    def predict(self, image):
+        image = torch.tensor(image).float().cuda()[None, None, ...]
+        padding = self.net.crop_size
         padding = (padding, padding, padding, padding)
 
         result0 = list()
