@@ -72,7 +72,8 @@ def _calc_old_fov(old_shape):
 
     """
     step_size = 1
-    lefts = (-0.5, -0.5, -0.5)
+    # lefts = (-0.5, -0.5, -0.5)
+    lefts = (-0.5, ) * len(old_shape)
     rights = tuple(l + s * step_size for l, s in zip(lefts, old_shape))
     return lefts, rights
 
