@@ -17,6 +17,7 @@ parser.add_argument('-e', '--num-epochs', default=100, type=int)
 parser.add_argument('-I', '--image-save-step', default=50, type=int)
 parser.add_argument('-W', '--num-channels-multiplier', default=8, type=int)
 parser.add_argument('-P', '--use-padding', action='store_true')
+parser.add_argument('-R', '--receptive-field', default=9, type=int)
 args = parser.parse_args()
 
 
@@ -99,9 +100,12 @@ save_args(args, args_filename)
 #            scale=args.scale1, res_scale=args.residual_scale).cuda()
 net = WDSRB(args.scale1, num_channels=args.num_channels,
             num_chan_multiplier=args.num_channels_multiplier,
-            num_blocks=args.num_blocks, use_padding=args.use_padding).cuda()
+            num_blocks=args.num_blocks, use_padding=args.use_padding,
+            num_k3=(args.receptive_field - 1) // 2).cuda()
 optim = AdamW(net.parameters(), lr=args.learning_rate)
 loss_func = L1SobelLoss().cuda()
+print(net)
+print(optim)
 
 trainer = Trainer(sampler, slice_profile, args.scale0, args.scale1,
                   net, optim, loss_func, batch_size=args.batch_size,

@@ -9,24 +9,30 @@ from .utils import pixel_shuffle
 
 class WDSRB(nn.Module):
     def __init__(self, scale, num_channels=32, num_chan_multiplier=8,
-                 num_blocks=16, use_padding=False):
+                 num_blocks=16, use_padding=False, num_k3=4):
         super().__init__()
         self.scale = scale
         self.num_channels = num_channels
         self.num_chan_multiplier = num_chan_multiplier
         self.num_blocks = num_blocks
         self.use_padding = use_padding
+        self.num_k3 = num_k3
 
-        padding = 1 if self.use_padding else 0
-        self.conv0 = weight_norm(nn.Conv2d(1, num_channels, 3, padding=padding))
+        # padding = 1 if self.use_padding else 0
+        self.conv0 = weight_norm(nn.Conv2d(1, num_channels, 1))
         init.ones_(self.conv0.weight_g)
         init.zeros_(self.conv0.bias)
 
         res_scale = 1 / math.sqrt(num_blocks)
-        for i in range(num_blocks):
-            block = Block(num_channels, num_chan_multiplier, res_scale,
-                          use_padding=self.use_padding)
+
+        for i in range(num_k3):
+            block = Block3(num_channels, num_chan_multiplier, res_scale,
+                           use_padding=self.use_padding)
             self.add_module('block%d' % i, block)
+
+        for i in range(num_blocks - num_k3):
+            block = Block2(num_channels, num_chan_multiplier, res_scale)
+            self.add_module('block%d' % (i + num_k3), block)
         
         out_channels = scale
         conv = nn.Conv2d(num_channels, out_channels, 1)
@@ -41,8 +47,9 @@ class WDSRB(nn.Module):
         init.ones_(self.skip_conv.weight_g)
         init.zeros_(self.skip_conv.bias)
 
+        self.crop_size = 0
         if not self.use_padding:
-            self.crop_size = self.num_blocks + 1
+            self.crop_size = num_k3
             self._skip_crop = self.crop_size - (skip_ks - 1) // 2
 
     def forward(self, x):
@@ -56,18 +63,47 @@ class WDSRB(nn.Module):
 
     def _apply_skip_conv(self, x):
         skip = self.skip_conv(x)
-        if not self.use_padding:
+        if not self.use_padding and self._skip_crop > 0:
             crop = self._skip_crop
             skip = skip[..., crop : -crop, crop : -crop]
         return skip
 
     def crop(self, batch):
-        crop1 = self.crop_size
-        crop0 = self.scale * self.crop_size
-        return batch[:, :, crop0 : -crop0, crop1 : -crop1]
+        if not self.use_padding:
+            crop1 = self.crop_size
+            crop0 = self.scale * self.crop_size
+            return batch[:, :, crop0 : -crop0, crop1 : -crop1]
+        else:
+            return batch
 
 
-class Block(nn.Module):
+class Block2(nn.Module):
+    def __init__(self, num_channels, num_chan_multiplier=8, res_scale=1):
+        super().__init__()
+        self.num_channels = num_channels
+        self.num_chan_multiplier = num_chan_multiplier
+        self.res_scale = res_scale
+
+        out_channels = int(num_channels * num_chan_multiplier)
+        self.conv0 = weight_norm(nn.Conv2d(num_channels, out_channels, 1))
+        init.ones_(self.conv0.weight_g)
+        init.zeros_(self.conv0.bias)
+
+        self.relu = nn.ReLU()
+
+        self.conv1 = weight_norm(nn.Conv2d(out_channels, num_channels, 1))
+        init.ones_(self.conv1.weight_g)
+        init.zeros_(self.conv1.bias)
+
+    def forward(self, x):
+        out = self.conv0(x)
+        out = self.relu(out)
+        out = self.conv1(out)
+        out = out + x
+        return out
+
+
+class Block3(nn.Module):
     def __init__(self, num_channels, num_chan_multiplier=8, res_scale=1,
                  use_padding=False):
         super().__init__()
