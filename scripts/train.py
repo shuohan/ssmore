@@ -13,7 +13,8 @@ parser.add_argument('-w', '--num-channels', default=256, type=int)
 parser.add_argument('-r', '--residual-scale', default=0.1, type=float)
 parser.add_argument('-l', '--learning-rate', default=0.0001, type=float)
 parser.add_argument('-b', '--batch-size', default=100, type=int)
-parser.add_argument('-e', '--num-epochs', default=100, type=int)
+parser.add_argument('-e', '--num-aa-epochs', default=100, type=int)
+parser.add_argument('-E', '--num-sr-epochs', default=100, type=int)
 parser.add_argument('-I', '--image-save-step', default=50, type=int)
 parser.add_argument('-W', '--num-channels-multiplier', default=8, type=int)
 parser.add_argument('-P', '--use-padding', action='store_true')
@@ -47,7 +48,8 @@ log_filename_aa = Path(args.output_dir, 'loss_aa.csv')
 image_dirname_sr = Path(args.output_dir, 'patches_sr')
 log_filename_sr = Path(args.output_dir, 'loss_sr.csv')
 args_filename = Path(args.output_dir, 'config.json')
-result_filename = Path(args.output_dir, 'result.nii.gz')
+result_filename_aa = Path(args.output_dir, 'result_aa.nii.gz')
+result_filename_sr = Path(args.output_dir, 'result_sr.nii.gz')
 
 obj = nib.load(args.image)
 voxel_size = obj.header.get_zooms()
@@ -109,7 +111,7 @@ loss_func = L1SobelLoss().cuda()
 print(net_aa)
 print(optim_aa)
 
-net_sr = WDSRB(args.scale1, num_channels=args.num_channels,
+net_sr = WDSRB(1, num_channels=args.num_channels,
                num_chan_multiplier=args.num_channels_multiplier,
                num_blocks=args.num_blocks, use_padding=args.use_padding,
                num_k3=(args.receptive_field - 1) // 2).cuda()
@@ -120,7 +122,7 @@ print(optim_sr)
 
 trainer_aa = TrainerAA(sampler, slice_profile, args.scale0, args.scale1,
                        net_aa, optim_aa, loss_func, batch_size=args.batch_size,
-                       num_epochs=args.num_epochs)
+                       num_epochs=args.num_aa_epochs)
 queue_aa = DataQueue(['loss'])
 logger_aa = EpochLogger(log_filename_aa)
 printer_aa = EpochPrinter(print_sep=False)
@@ -134,10 +136,31 @@ trainer_aa.register(queue_aa)
 trainer_aa.register(image_saver_aa)
 trainer_aa.train()
 
+trainer_sr = TrainerSR(sampler, slice_profile, net_sr, optim_sr, loss_func,
+                       batch_size=args.batch_size, num_epochs=args.num_sr_epochs)
+queue_sr = DataQueue(['loss'])
+logger_sr = EpochLogger(log_filename_sr)
+printer_sr = EpochPrinter(print_sep=False)
+queue_sr.register(logger_sr)
+queue_sr.register(printer_sr)
+attrs =  ['hr', 'blur', 'output', 'truth']
+image_saver_sr = ImageSaver(image_dirname_sr, attrs=attrs,
+                            step=args.image_save_step, zoom=4, ordered=True,
+                            file_struct='epoch/sample', save_type='png_norm')
+trainer_sr.register(queue_sr)
+trainer_sr.register(image_saver_sr)
+trainer_sr.train()
+
 image, inv_x, inv_y, inv_z = permute3d(image, x=x, y=y, z=z)
-result = trainer_aa.predict(image).detach().cpu().numpy().squeeze()
-result = permute3d(result, x=inv_x, y=inv_y, z=inv_z)[0]
+aa = trainer_aa.predict(image).detach().cpu().numpy().squeeze()
+sr = trainer_sr.predict(aa).detach().cpu().numpy().squeeze()
+
 scale_mat = np.diag(np.array([1, 1, 1 / scale, 1])[[x, y, z, 3]])
 affine = obj.affine @ scale_mat
-out = nib.Nifti1Image(result, affine, obj.header)
-out.to_filename(result_filename)
+result_aa = permute3d(aa, x=inv_x, y=inv_y, z=inv_z)[0]
+out_aa = nib.Nifti1Image(result_aa, affine, obj.header)
+out_aa.to_filename(result_filename_aa)
+
+result_sr = permute3d(sr, x=inv_x, y=inv_y, z=inv_z)[0]
+out_sr = nib.Nifti1Image(result_sr, affine, obj.header)
+out_sr.to_filename(result_filename_sr)
