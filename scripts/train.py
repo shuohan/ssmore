@@ -137,14 +137,15 @@ trainer_aa.register(queue_aa)
 trainer_aa.register(image_saver_aa)
 # trainer_aa.train()
 
-trainer_sr = TrainerSR(sampler, slice_profile, net_sr, optim_sr, loss_func,
+trainer_sr = TrainerSR(sampler, slice_profile, args.scale0, args.scale1,
+                       net_sr, optim_sr, loss_func,
                        batch_size=args.batch_size, num_epochs=args.num_sr_epochs)
 queue_sr = DataQueue(['loss'])
 logger_sr = EpochLogger(log_filename_sr)
 printer_sr = EpochPrinter(print_sep=False)
 queue_sr.register(logger_sr)
 queue_sr.register(printer_sr)
-attrs =  ['hr', 'blur', 'output', 'truth']
+attrs =  ['hr', 'blur', 'input', 'output', 'truth']
 image_saver_sr = ImageSaver(image_dirname_sr, attrs=attrs,
                             step=args.image_save_step, zoom=4, ordered=True,
                             file_struct='epoch/sample', save_type='png_norm')
@@ -156,6 +157,12 @@ trainer_sr.train()
 # aa = trainer_aa.predict(image).detach().cpu().numpy().squeeze()
 
 aa = nib.load('results_train_with_kernel_padding_d8_aa/result.nii.gz').get_fdata(dtype=np.float32)
+# aa = nib.load('/data/smore_simu_correct/orig_data/sub-OAS30167_ses-d0111_T1w_initnorm.nii.gz').get_fdata(dtype=np.float32)
+# aa = torch.tensor(aa)[None, None, ...].cuda()
+# k = slice_profile.squeeze()[None, None, None, None, :]
+# padding = (k.shape[-1] - 1) // 2
+# aa = torch.nn.functional.conv3d(aa, k, padding=padding)
+# aa = aa.detach().cpu().numpy().squeeze()
 aa, inv_x, inv_y, inv_z = permute3d(aa, x=x, y=y, z=z)
 sr = trainer_sr.predict(aa).detach().cpu().numpy().squeeze()
 print(aa.shape, sr.shape)

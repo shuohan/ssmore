@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+import numpy as np
 from ptxl.observer import Subject, Observer, SubjectObserver
 from ptxl.utils import NamedData
 
@@ -7,8 +8,8 @@ from .resize import resize_pt
 
 
 class TrainerSR(Subject):
-    def __init__(self, sampler, slice_profile, net, optim, loss_func,
-                 batch_size, num_epochs):
+    def __init__(self, sampler, slice_profile, scale0, scale1, net, optim,
+                 loss_func, batch_size, num_epochs):
         super().__init__()
         self.sampler = sampler
         self.slice_profile = slice_profile
@@ -19,6 +20,8 @@ class TrainerSR(Subject):
         self._num_epochs = num_epochs
         self._epoch_ind = -1
         self._batch_ind = -1
+        self.scale0 = scale0
+        self.scale1 = scale1
 
     @property
     def batch_size(self):
@@ -81,11 +84,19 @@ class TrainerSR(Subject):
         self._blur = F.conv2d(self._hr, self.slice_profile)
 
     def _get_input(self):
-        self._input = self._blur
+        # self._input = self._blur
+        scale = np.random.uniform(low=1, high=self.scale0 * self.scale1)
+        print(scale)
+        batch = resize_pt(self._blur, (scale, 1))
+        batch = resize_pt(batch, (1 / scale, 1))
+        self._input = batch
 
     def _get_truth(self):
         crop = (self.slice_profile.shape[2] - 1) // 2
         self._truth = self._hr[:, :, crop : -crop, ...]
+        size = self._input.shape[2]
+        self._truth = self.net.crop(self._truth[:, :, :size, ...])
+        # print(self._truth.shape, self._input.shape)
 
     def cont(self, ckpt):
         self.net.load_state_dict(ckpt['model_state_dict'])
@@ -176,10 +187,8 @@ class TrainerSR(Subject):
 class TrainerAA(TrainerSR):
     def __init__(self, sampler, slice_profile, scale0, scale1,
                  net, optim, loss_func, batch_size, num_epochs):
-        super().__init__(sampler, slice_profile, net, optim, loss_func,
-                         batch_size, num_epochs)
-        self.scale0 = scale0
-        self.scale1 = scale1
+        super().__init__(sampler, slice_profile, scale0, scale1, net, optim,
+                         loss_func, batch_size, num_epochs)
 
     def _get_batch(self):
         super()._get_batch()
