@@ -102,10 +102,11 @@ save_args(args, args_filename)
 
 # net = EDSR(num_blocks=args.num_blocks, num_channels=args.num_channels,
 #            scale=args.scale1, res_scale=args.residual_scale).cuda()
+num_k3 = (args.receptive_field - 1) // 2
 net_aa = WDSRB(args.scale1, num_channels=args.num_channels,
                num_chan_multiplier=args.num_channels_multiplier,
                num_blocks=args.num_blocks, use_padding=args.use_padding,
-               num_k3=(args.receptive_field - 1) // 2).cuda()
+               num_k3=num_k3).cuda()
 optim_aa = AdamW(net_aa.parameters(), lr=args.learning_rate)
 loss_func = L1SobelLoss().cuda()
 print(net_aa)
@@ -113,8 +114,8 @@ print(optim_aa)
 
 net_sr = WDSRB(1, num_channels=args.num_channels,
                num_chan_multiplier=args.num_channels_multiplier,
-               num_blocks=args.num_blocks, use_padding=args.use_padding,
-               num_k3=(args.receptive_field - 1) // 2).cuda()
+               num_blocks=num_k3, use_padding=args.use_padding,
+               num_k3=num_k3).cuda()
 optim_sr = AdamW(net_sr.parameters(), lr=args.learning_rate)
 loss_func = L1SobelLoss().cuda()
 print(net_sr)
@@ -134,7 +135,7 @@ image_saver_aa = ImageSaver(image_dirname_aa, attrs=attrs,
                             file_struct='epoch/sample', save_type='png_norm')
 trainer_aa.register(queue_aa)
 trainer_aa.register(image_saver_aa)
-trainer_aa.train()
+# trainer_aa.train()
 
 trainer_sr = TrainerSR(sampler, slice_profile, net_sr, optim_sr, loss_func,
                        batch_size=args.batch_size, num_epochs=args.num_sr_epochs)
@@ -151,9 +152,13 @@ trainer_sr.register(queue_sr)
 trainer_sr.register(image_saver_sr)
 trainer_sr.train()
 
-image, inv_x, inv_y, inv_z = permute3d(image, x=x, y=y, z=z)
-aa = trainer_aa.predict(image).detach().cpu().numpy().squeeze()
+# image, inv_x, inv_y, inv_z = permute3d(image, x=x, y=y, z=z)
+# aa = trainer_aa.predict(image).detach().cpu().numpy().squeeze()
+
+aa = nib.load('results_train_with_kernel_padding_d8_aa/result.nii.gz').get_fdata(dtype=np.float32)
+aa, inv_x, inv_y, inv_z = permute3d(aa, x=x, y=y, z=z)
 sr = trainer_sr.predict(aa).detach().cpu().numpy().squeeze()
+print(aa.shape, sr.shape)
 
 scale_mat = np.diag(np.array([1, 1, 1 / scale, 1])[[x, y, z, 3]])
 affine = obj.affine @ scale_mat

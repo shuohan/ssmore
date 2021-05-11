@@ -41,6 +41,7 @@ class TrainerSR(Subject):
         return self._batch_ind + 1
 
     def train(self, start_ind=0):
+        self.net.train()
         self.notify_observers_on_train_start()
         num_indices = self.batch_size * self.num_epochs
         self._indices = self.sampler.sample_indices(num_indices)
@@ -93,14 +94,15 @@ class TrainerSR(Subject):
 
     def predict(self, image):
         image = torch.tensor(image).float().cuda()[None, None, ...]
+        self.net.eval()
 
         result0 = list()
-        with torch.no_grad():
-            for i in range(image.shape[2]):
-                batch = image[:, :, i, ...].permute(0, 1, 3, 2)
-                batch = self._predict(batch)
-                result0.append(batch.permute(0, 1, 3, 2))
-        result0 = torch.stack(result0, dim=2)
+        # with torch.no_grad():
+        #     for i in range(image.shape[2]):
+        #         batch = image[:, :, i, ...].permute(0, 1, 3, 2)
+        #         batch = self._predict(batch)
+        #         result0.append(batch.permute(0, 1, 3, 2))
+        # result0 = torch.stack(result0, dim=2)
 
         result1 = list()
         with torch.no_grad():
@@ -110,12 +112,14 @@ class TrainerSR(Subject):
                 result1.append(batch.permute(0, 1, 3, 2))
         result1 = torch.stack(result1, dim=3)
 
-        result = (result1 + result0) / 2
+        # result = (result1 + result0) / 2
+        result = result1
 
         return result
 
     def _predict(self, image_slice):
-        return self.net(self.net.pad(image_slice))
+        result = self.net(self.net.pad(image_slice))
+        return result
 
     def _convert_data(self, data):
         # result = data / self._intensity_max
