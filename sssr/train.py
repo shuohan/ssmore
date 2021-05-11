@@ -6,14 +6,12 @@ from ptxl.utils import NamedData
 from .resize import resize_pt
 
 
-class Trainer(Subject):
-    def __init__(self, sampler, slice_profile, scale0, scale1,
-                 net, optim, loss_func, batch_size=16, num_epochs=100):
+class TrainerSR(Subject):
+    def __init__(self, sampler, slice_profile, net, optim, loss_func,
+                 batch_size, num_epochs):
         super().__init__()
         self.sampler = sampler
         self.slice_profile = slice_profile
-        self.scale0 = scale0
-        self.scale1 = scale1
         self.net = net
         self.optim = optim
         self.loss_func = loss_func
@@ -55,47 +53,38 @@ class Trainer(Subject):
         self.notify_observers_on_train_end()
 
     def _train_on_batch(self):
-        start_ind = self._epoch_ind * self.batch_size
-        stop_ind = start_ind + self.batch_size 
-        indices = self._indices[start_ind : stop_ind]
-        batch = self.sampler.get_patches(indices)
-        self._names = batch.name
+        self._get_batch()
+        self._get_input()
+        self._get_truth()
 
-        self._extracted = batch.data
-        self._blur = F.conv2d(self._extracted, self.slice_profile)
-        self._lr = resize_pt(self._blur, (self.scale0 * self.scale1, 1))
-        self._input = resize_pt(self._lr, (1 / self.scale0, 1))
-        self._input_interp = self._interp_input(self._input)
-        self._hr_crop = self._crop_hr(self._extracted)
+        self.optim.zero_grad()
+        self._output = self.net(self._input)
+        self._loss = self.loss_func(self._output, self._truth)
+        self._loss.backward()
+        self.optim.step()
 
         # print('blur', self._blur.shape)
         # print('lr', self._lr.shape)
         # print('input', self._input.shape)
         # print('input_interp', self._input_interp.shape)
         # print('hr', self._hr_crop.shape)
-
-        self.optim.zero_grad()
-        self._output = self.net(self._input)
-
         # print('output', self._output.shape)
 
-        self._loss = self.loss_func(self._output, self._hr_crop)
-        self._loss.backward()
-        self.optim.step()
+    def _get_batch(self):
+        start_ind = self._epoch_ind * self.batch_size
+        stop_ind = start_ind + self.batch_size
+        indices = self._indices[start_ind : stop_ind]
+        batch = self.sampler.get_patches(indices)
+        self._hr = batch.data
+        self._names = batch.name
+        self._blur = F.conv2d(self._hr, self.slice_profile)
 
-    def _crop_hr(self, hr_batch):
+    def _get_input(self):
+        self._input = self._blur
+
+    def _get_truth(self):
         crop = (self.slice_profile.shape[2] - 1) // 2
-        result = hr_batch[:, :, crop : -crop, ...]
-        size = self._input.shape[2] * self.scale1
-        result = result[:, :, :size, ...]
-        result = self.net.crop(result)
-        return result
-
-    def _interp_input(self, input_batch):
-        result = resize_pt(input_batch, (1 / self.scale1, 1))
-        result = F.pad(result, (0, 0, 0, self.scale1 - 1), mode='replicate')
-        result = self.net.crop(result)
-        return result
+        self._truth = self._hr[:, :, crop : -crop, ...]
 
     def cont(self, ckpt):
         self.net.load_state_dict(ckpt['model_state_dict'])
@@ -104,32 +93,29 @@ class Trainer(Subject):
 
     def predict(self, image):
         image = torch.tensor(image).float().cuda()[None, None, ...]
-        padding = self.net.crop_size
-        padding = (padding, padding, padding, padding)
 
         result0 = list()
         with torch.no_grad():
             for i in range(image.shape[2]):
                 batch = image[:, :, i, ...].permute(0, 1, 3, 2)
-                interp = resize_pt(batch, (1/ self.scale0, 1))
-                padded = F.pad(interp, padding, mode='replicate')
-                sr = self.net(padded)
-                result0.append(sr.permute(0, 1, 3, 2))
+                batch = self._predict(batch)
+                result0.append(batch.permute(0, 1, 3, 2))
         result0 = torch.stack(result0, dim=2)
 
         result1 = list()
         with torch.no_grad():
             for i in range(image.shape[3]):
                 batch = image[:, :, :, i, :].permute(0, 1, 3, 2)
-                interp = resize_pt(batch, (1/ self.scale0, 1))
-                padded = F.pad(interp, padding, mode='replicate')
-                sr = self.net(padded)
-                result1.append(sr.permute(0, 1, 3, 2))
+                batch = self._predict(batch)
+                result1.append(batch.permute(0, 1, 3, 2))
         result1 = torch.stack(result1, dim=3)
 
         result = (result1 + result0) / 2
 
         return result
+
+    def _predict(self, image_slice):
+        return self.net(self.net.pad(image_slice))
 
     def _convert_data(self, data):
         # result = data / self._intensity_max
@@ -139,12 +125,12 @@ class Trainer(Subject):
         return result
 
     @property
-    def extracted_cuda(self):
+    def hr_cuda(self):
         return self._extracted
 
     @property
-    def extracted(self):
-        return self._convert_data(self._extracted)
+    def hr(self):
+        return self._convert_data(self._hr)
 
     @property
     def blur_cuda(self):
@@ -155,20 +141,12 @@ class Trainer(Subject):
         return self._convert_data(self._blur)
 
     @property
-    def lr_cuda(self):
-        return self._lr
+    def truth_cuda(self):
+        return self._truth
 
     @property
-    def lr(self):
-        return self._convert_data(self._lr)
-
-    @property
-    def hr_crop_cuda(self):
-        return self._hr_crop
-
-    @property
-    def hr_crop(self):
-        return self._convert_data(self._hr_crop)
+    def truth(self):
+        return self._convert_data(self._truth)
 
     @property
     def input_cuda(self):
@@ -177,14 +155,6 @@ class Trainer(Subject):
     @property
     def input(self):
         return self._convert_data(self._input)
-
-    @property
-    def input_interp_cuda(self):
-        return self._input_interp
-
-    @property
-    def input_interp(self):
-        return self._convert_data(self._input_interp)
 
     @property
     def output_cuda(self):
@@ -197,3 +167,51 @@ class Trainer(Subject):
     @property
     def loss(self):
         return self._loss.item()
+
+
+class TrainerAA(TrainerSR):
+    def __init__(self, sampler, slice_profile, scale0, scale1,
+                 net, optim, loss_func, batch_size, num_epochs):
+        super().__init__(sampler, slice_profile, net, optim, loss_func,
+                         batch_size, num_epochs)
+        self.scale0 = scale0
+        self.scale1 = scale1
+
+    def _get_batch(self):
+        super()._get_batch()
+        self._lr = resize_pt(self._blur, (self.scale0 * self.scale1, 1))
+
+    def _get_input(self):
+        self._input = resize_pt(self._lr, (1 / self.scale0, 1))
+        self._input_interp = self._interp_input(self._input)
+
+    def _interp_input(self, input_batch):
+        result = resize_pt(input_batch, (1 / self.scale1, 1))
+        result = F.pad(result, (0, 0, 0, self.scale1 - 1), mode='replicate')
+        result = self.net.crop(result)
+        return result
+
+    def _get_truth(self):
+        size = self._input.shape[2] * self.scale1
+        self._truth = self.net.crop(self._blur[:, :, :size, ...])
+
+    def _predict(self, image_slice):
+        interp = resize_pt(image_slice, (1/ self.scale0, 1))
+        padded = self.net.pad(interp)
+        return self.net(padded)
+
+    @property
+    def input_interp_cuda(self):
+        return self._input_interp
+
+    @property
+    def input_interp(self):
+        return self._convert_data(self._input_interp)
+
+    @property
+    def lr_cuda(self):
+        return self._lr
+
+    @property
+    def lr(self):
+        return self._convert_data(self._lr)

@@ -34,7 +34,7 @@ from sssrlib.transform import Flip
 from ptxl.save import ImageSaver 
 from ptxl.log import EpochLogger, EpochPrinter, DataQueue
 
-from sssr.train import Trainer
+from sssr.train import TrainerAA, TrainerSR
 from sssr.edsr import EDSR
 from sssr.wdsr import WDSRB
 from sssr.utils import calc_gaussian_slice_profie, get_axis_order, save_args
@@ -42,8 +42,10 @@ from sssr.utils import calc_patch_size, L1SobelLoss
 
 
 Path(args.output_dir).mkdir(parents=True)
-image_dirname = Path(args.output_dir, 'patches')
-log_filename = Path(args.output_dir, 'log.csv')
+image_dirname_aa = Path(args.output_dir, 'patches_aa')
+log_filename_aa = Path(args.output_dir, 'loss_aa.csv')
+image_dirname_sr = Path(args.output_dir, 'patches_sr')
+log_filename_sr = Path(args.output_dir, 'loss_sr.csv')
 args_filename = Path(args.output_dir, 'config.json')
 result_filename = Path(args.output_dir, 'result.nii.gz')
 
@@ -98,33 +100,42 @@ save_args(args, args_filename)
 
 # net = EDSR(num_blocks=args.num_blocks, num_channels=args.num_channels,
 #            scale=args.scale1, res_scale=args.residual_scale).cuda()
-net = WDSRB(args.scale1, num_channels=args.num_channels,
-            num_chan_multiplier=args.num_channels_multiplier,
-            num_blocks=args.num_blocks, use_padding=args.use_padding,
-            num_k3=(args.receptive_field - 1) // 2).cuda()
-optim = AdamW(net.parameters(), lr=args.learning_rate)
+net_aa = WDSRB(args.scale1, num_channels=args.num_channels,
+               num_chan_multiplier=args.num_channels_multiplier,
+               num_blocks=args.num_blocks, use_padding=args.use_padding,
+               num_k3=(args.receptive_field - 1) // 2).cuda()
+optim_aa = AdamW(net_aa.parameters(), lr=args.learning_rate)
 loss_func = L1SobelLoss().cuda()
-print(net)
-print(optim)
+print(net_aa)
+print(optim_aa)
 
-trainer = Trainer(sampler, slice_profile, args.scale0, args.scale1,
-                  net, optim, loss_func, batch_size=args.batch_size,
-                  num_epochs=args.num_epochs)
-queue = DataQueue(['loss'])
-logger = EpochLogger(log_filename)
-printer = EpochPrinter(print_sep=False)
-queue.register(logger)
-queue.register(printer)
-attrs =  ['extracted', 'blur', 'lr', 'input_interp', 'output', 'hr_crop']
-image_saver = ImageSaver(image_dirname, attrs=attrs,
-                         step=args.image_save_step, zoom=4, ordered=True,
-                         file_struct='epoch/sample', save_type='png_norm')
-trainer.register(queue)
-trainer.register(image_saver)
-trainer.train()
+net_sr = WDSRB(args.scale1, num_channels=args.num_channels,
+               num_chan_multiplier=args.num_channels_multiplier,
+               num_blocks=args.num_blocks, use_padding=args.use_padding,
+               num_k3=(args.receptive_field - 1) // 2).cuda()
+optim_sr = AdamW(net_sr.parameters(), lr=args.learning_rate)
+loss_func = L1SobelLoss().cuda()
+print(net_sr)
+print(optim_sr)
+
+trainer_aa = TrainerAA(sampler, slice_profile, args.scale0, args.scale1,
+                       net_aa, optim_aa, loss_func, batch_size=args.batch_size,
+                       num_epochs=args.num_epochs)
+queue_aa = DataQueue(['loss'])
+logger_aa = EpochLogger(log_filename_aa)
+printer_aa = EpochPrinter(print_sep=False)
+queue_aa.register(logger_aa)
+queue_aa.register(printer_aa)
+attrs =  ['hr', 'blur', 'lr', 'input_interp', 'output', 'truth']
+image_saver_aa = ImageSaver(image_dirname_aa, attrs=attrs,
+                            step=args.image_save_step, zoom=4, ordered=True,
+                            file_struct='epoch/sample', save_type='png_norm')
+trainer_aa.register(queue_aa)
+trainer_aa.register(image_saver_aa)
+trainer_aa.train()
 
 image, inv_x, inv_y, inv_z = permute3d(image, x=x, y=y, z=z)
-result = trainer.predict(image).detach().cpu().numpy().squeeze()
+result = trainer_aa.predict(image).detach().cpu().numpy().squeeze()
 result = permute3d(result, x=inv_x, y=inv_y, z=inv_z)[0]
 scale_mat = np.diag(np.array([1, 1, 1 / scale, 1])[[x, y, z, 3]])
 affine = obj.affine @ scale_mat

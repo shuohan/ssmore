@@ -1,5 +1,6 @@
 import math
 import torch
+import torch.nn.functional as F
 from torch import nn
 from torch.nn import init
 from torch.nn.utils import weight_norm
@@ -58,7 +59,8 @@ class WDSRB(nn.Module):
             out = getattr(self, 'block%d' % i)(out)
         out = self.conv1(out)
         out = out + self._apply_skip_conv(x)
-        out = pixel_shuffle(out, self.scale)
+        if self.scale > 1:
+            out = pixel_shuffle(out, self.scale)
         return out
 
     def _apply_skip_conv(self, x):
@@ -76,6 +78,15 @@ class WDSRB(nn.Module):
         else:
             return batch
 
+    def pad(self, batch):
+        padding = (self.crop_size, ) * 4
+        return F.pad(batch, padding, mode='replicate')
+
+    def _interp_input(self, input_batch):
+        result = resize_pt(input_batch, (1 / self.scale1, 1))
+        result = F.pad(result, (0, 0, 0, self.scale1 - 1), mode='replicate')
+        result = self.net.crop(result)
+        return result
 
 class Block2(nn.Module):
     def __init__(self, num_channels, num_chan_multiplier=8, res_scale=1):
