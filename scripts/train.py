@@ -18,6 +18,7 @@ parser.add_argument('-I', '--image-save-step', default=50, type=int)
 parser.add_argument('-W', '--num-channels-multiplier', default=8, type=int)
 parser.add_argument('-P', '--use-padding', action='store_true')
 parser.add_argument('-R', '--receptive-field', default=9, type=int)
+parser.add_argument('-g', '--num-groups', default=4, type=int)
 args = parser.parse_args()
 
 
@@ -25,11 +26,13 @@ import torch
 import nibabel as nib
 import numpy as np
 from pathlib import Path
-from torch.optim import AdamW
+from torch.optim import AdamW, Adam
 from improc3d import permute3d
+from torch.nn import L1Loss, MSELoss
 
 from sssr.models.edsr import EDSR
 from sssr.models.wdsr import WDSRB
+from sssr.models.rcan import RCAN
 from sssr.utils import calc_gaussian_slice_profie, get_axis_order, save_args
 from sssr.utils import calc_patch_size, L1SobelLoss
 from sssr.build import build_sampler, build_trainer
@@ -65,12 +68,16 @@ save_args(args, args_filename)
 image = obj.get_fdata(dtype=np.float32)
 sampler = build_sampler(image, patch_size, (x, y, z), voxel_size)
 
-net = WDSRB(args.scale1, num_channels=args.num_channels,
-            num_chan_multiplier=args.num_channels_multiplier,
-            num_blocks=args.num_blocks, use_padding=args.use_padding,
-            num_k3=(args.receptive_field - 1) // 2).cuda()
-optim = AdamW(net.parameters(), lr=args.learning_rate)
-loss_func = L1SobelLoss().cuda()
+# net = WDSRB(args.scale1, num_channels=args.num_channels,
+#             num_chan_multiplier=args.num_channels_multiplier,
+#             num_blocks=args.num_blocks, use_padding=args.use_padding,
+#             num_k3=(args.receptive_field - 1) // 2).cuda()
+# optim = AdamW(net.parameters(), lr=args.learning_rate)
+net = RCAN(args.num_groups, args.num_blocks, args.num_channels, 16,
+           args.scale1).cuda()
+optim = Adam(net.parameters(), lr=args.learning_rate)
+# loss_func = L1SobelLoss().cuda()
+loss_func = L1Loss().cuda()
 print(net)
 print(optim)
 

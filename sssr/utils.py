@@ -37,7 +37,7 @@ def save_args(args, filename):
 
 def calc_patch_size(lr_patch_size, sp_len, scale1):
     ps0 = lr_patch_size[0] * scale1 + sp_len
-    ps1 = lr_patch_size[1]
+    ps1 = lr_patch_size[1] # * scale1
     return [ps0, ps1, 1]
 
 

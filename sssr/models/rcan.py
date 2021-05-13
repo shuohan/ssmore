@@ -112,7 +112,9 @@ class RCAN(nn.Module):
 
         self.conv1 = nn.Conv2d(num_channels, num_channels, kernel_size,
                                padding=padding)
-        self.up = Upsample(num_channels, scale)
+        self.up = Upsample(num_channels, scale, use_padding=True)
+
+        self.crop_size = 0
 
     def forward(self, x):
         x = self.conv0(x)
@@ -123,3 +125,6 @@ class RCAN(nn.Module):
         out = res + x
         out = self.up(out)
         return out
+
+    def crop(self, x):
+        return x

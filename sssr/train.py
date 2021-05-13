@@ -68,15 +68,15 @@ class Trainer(Subject):
         self._input_interp = self._interp_input(self._input)
         self._hr_crop = self._crop_hr(self._extracted)
 
+        self.optim.zero_grad()
+        self._output = self.net(self._input)
+
+        # print('extracted', self._extracted.shape)
         # print('blur', self._blur.shape)
         # print('lr', self._lr.shape)
         # print('input', self._input.shape)
         # print('input_interp', self._input_interp.shape)
         # print('hr', self._hr_crop.shape)
-
-        self.optim.zero_grad()
-        self._output = self.net(self._input)
-
         # print('output', self._output.shape)
 
         self._loss = self.loss_func(self._output, self._hr_crop)
