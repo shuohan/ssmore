@@ -7,7 +7,7 @@ This code is modified from
 """
 from torch import nn
 
-from .utils import pixel_shuffle
+from ..utils import pixel_shuffle
 
 
 class ResBlock(nn.Module):
@@ -28,11 +28,15 @@ class ResBlock(nn.Module):
 
 
 class Upsample(nn.Module):
-    def __init__(self, num_channels, scale):
+    def __init__(self, num_channels, scale, use_padding=False):
         super().__init__()
         self.num_channels = num_channels
         self.scale = scale
-        self.conv0 = nn.Conv2d(num_channels, scale * num_channels, 3)
+        self.use_padding = use_padding
+
+        padding = 1 if use_padding else 0
+        self.conv0 = nn.Conv2d(num_channels, scale * num_channels, 3,
+                               padding=padding)
         self.conv1 = nn.Conv2d(num_channels, 1, 1)
 
     def forward(self, x):

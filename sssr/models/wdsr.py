@@ -4,7 +4,7 @@ from torch import nn
 from torch.nn import init
 from torch.nn.utils import weight_norm
 
-from .utils import pixel_shuffle
+from ..utils import pixel_shuffle
 
 
 class WDSRB(nn.Module):
