@@ -10,16 +10,16 @@ parser.add_argument('-p', '--patch-size', default=[40, 40], type=int, nargs=2)
 parser.add_argument('-s', '--slice-profile', default='gaussian')
 parser.add_argument('-d', '--num-blocks', default=8, type=int)
 parser.add_argument('-w', '--num-channels', default=256, type=int)
-parser.add_argument('-r', '--residual-scale', default=0.1, type=float)
 parser.add_argument('-l', '--learning-rate', default=0.0001, type=float)
-parser.add_argument('-b', '--batch-size', default=100, type=int)
-parser.add_argument('-e', '--num-epochs', default=100, type=int)
+parser.add_argument('-b', '--batch-size', default=16, type=int)
+parser.add_argument('-e', '--num-epochs', default=10000, type=int)
 parser.add_argument('-n', '--num-iters', default=3, type=int)
 parser.add_argument('-I', '--image-save-step', default=50, type=int)
 parser.add_argument('-W', '--num-channels-multiplier', default=8, type=int)
 parser.add_argument('-P', '--use-padding', action='store_true')
-parser.add_argument('-R', '--receptive-field', default=9, type=int)
 parser.add_argument('-g', '--num-groups', default=4, type=int)
+parser.add_argument('-f', '--following-num-epochs', default=100, type=int)
+parser.add_argument('-S', '--iter-save-step', default=10, type=int)
 args = parser.parse_args()
 
 
@@ -81,13 +81,20 @@ perm_image, inv_x, inv_y, inv_z = permute3d(image, x=x, y=y, z=z)
 tmp_image = image
 
 for i in range(args.num_iters):
+    print('Iteration', i)
+    print('--------------------------------------')
+
     sampler = build_sampler(tmp_image, patch_size, (x, y, z), voxel_size)
+    # print(sampler.patches)
+    # print(tmp_image.sum(), tmp_image.shape)
+
     trainer = build_trainer(sampler, slice_profile, net, optim, loss_func, args, i)
     trainer.train()
 
     result = trainer.predict(perm_image).detach().cpu().numpy().squeeze()
     tmp_image = result
 
-    result = permute3d(result, x=inv_x, y=inv_y, z=inv_z)[0]
-    out = nib.Nifti1Image(result, affine, obj.header)
-    out.to_filename(args.result_filename + '%d.nii.gz' % i)
+    if i % args.iter_save_step == 0 or i == args.num_iters - 1:
+        result = permute3d(result, x=inv_x, y=inv_y, z=inv_z)[0]
+        out = nib.Nifti1Image(result, affine, obj.header)
+        out.to_filename(args.result_filename + '%d.nii.gz' % i)

@@ -49,19 +49,25 @@ def build_sampler(image, patch_size, xyz, voxel_size):
     return sampler
 
 
-def build_trainer(sampler, slice_profile, net, optim, loss_func, args, iters):
+def build_trainer(sampler, slice_profile, net, optim, loss_func, args, iter):
+    num_epochs = args.num_epochs if iter == 0 else args.following_num_epochs
+    step = min(args.image_save_step, num_epochs)
+
     trainer = Trainer(sampler, slice_profile, args.scale0, args.scale1,
                       net, optim, loss_func, batch_size=args.batch_size,
-                      num_epochs=args.num_epochs)
-    queue = DataQueue(['loss'])
-    logger = EpochLogger(args.log_filename + '%d.csv' % iters)
-    printer = EpochPrinter(print_sep=False)
-    queue.register(logger)
-    queue.register(printer)
-    attrs =  ['extracted', 'blur', 'lr', 'input_interp', 'output', 'hr_crop']
-    image_saver = ImageSaver(args.image_dirname + '%d' % iters, attrs=attrs,
-                             step=args.image_save_step, zoom=4, ordered=True,
-                             file_struct='epoch/sample', save_type='png_norm')
-    trainer.register(queue)
-    trainer.register(image_saver)
+                      num_epochs=num_epochs)
+
+    if iter % args.iter_save_step == 0 or iter == args.num_iters - 1:
+        queue = DataQueue(['loss'])
+        logger = EpochLogger(args.log_filename + '%d.csv' % iter)
+        printer = EpochPrinter(print_sep=False)
+        queue.register(logger)
+        queue.register(printer)
+        attrs =  ['extracted', 'blur', 'lr', 'input_interp', 'output', 'hr_crop']
+        image_saver = ImageSaver(args.image_dirname + '%d' % iter, attrs=attrs,
+                                 step=step, zoom=4, ordered=True,
+                                 file_struct='epoch/sample', save_type='png_norm')
+        trainer.register(queue)
+        trainer.register(image_saver)
+
     return trainer
