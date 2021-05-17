@@ -14,6 +14,7 @@ parser.add_argument('-r', '--residual-scale', default=0.1, type=float)
 parser.add_argument('-l', '--learning-rate', default=0.0001, type=float)
 parser.add_argument('-b', '--batch-size', default=100, type=int)
 parser.add_argument('-e', '--num-epochs', default=100, type=int)
+parser.add_argument('-n', '--num-iters', default=3, type=int)
 parser.add_argument('-I', '--image-save-step', default=50, type=int)
 parser.add_argument('-W', '--num-channels-multiplier', default=8, type=int)
 parser.add_argument('-P', '--use-padding', action='store_true')
@@ -40,8 +41,8 @@ from sssr.build import build_sampler, build_trainer
 
 Path(args.output_dir).mkdir(parents=True)
 args.image_dirname = str(Path(args.output_dir, 'patches'))
-args.log_filename = str(Path(args.output_dir, 'log.csv'))
-args.result_filename = str(Path(args.output_dir, 'result.nii.gz'))
+args.log_filename = str(Path(args.output_dir, 'log'))
+args.result_filename = str(Path(args.output_dir, 'result'))
 args_filename = str(Path(args.output_dir, 'config.json'))
 
 obj = nib.load(args.image)
@@ -65,29 +66,28 @@ args.hr_patch_size = patch_size
 
 save_args(args, args_filename)
 
-image = obj.get_fdata(dtype=np.float32)
-sampler = build_sampler(image, patch_size, (x, y, z), voxel_size)
-
-# net = WDSRB(args.scale1, num_channels=args.num_channels,
-#             num_chan_multiplier=args.num_channels_multiplier,
-#             num_blocks=args.num_blocks, use_padding=args.use_padding,
-#             num_k3=(args.receptive_field - 1) // 2).cuda()
-# optim = AdamW(net.parameters(), lr=args.learning_rate)
-net = RCAN(args.num_groups, args.num_blocks, args.num_channels, 16,
-           args.scale1).cuda()
+net = RCAN(args.num_groups, args.num_blocks, args.num_channels, 16, args.scale1)
+net = net.cuda()
 optim = Adam(net.parameters(), lr=args.learning_rate)
-# loss_func = L1SobelLoss().cuda()
 loss_func = L1Loss().cuda()
 print(net)
 print(optim)
+print(loss_func)
 
-trainer = build_trainer(sampler, slice_profile, net, optim, loss_func, args)
-trainer.train()
-
-image, inv_x, inv_y, inv_z = permute3d(image, x=x, y=y, z=z)
-result = trainer.predict(image).detach().cpu().numpy().squeeze()
-result = permute3d(result, x=inv_x, y=inv_y, z=inv_z)[0]
+image = obj.get_fdata(dtype=np.float32)
 scale_mat = np.diag(np.array([1, 1, 1 / scale, 1])[[x, y, z, 3]])
 affine = obj.affine @ scale_mat
-out = nib.Nifti1Image(result, affine, obj.header)
-out.to_filename(args.result_filename)
+perm_image, inv_x, inv_y, inv_z = permute3d(image, x=x, y=y, z=z)
+tmp_image = image
+
+for i in range(args.num_iters):
+    sampler = build_sampler(tmp_image, patch_size, (x, y, z), voxel_size)
+    trainer = build_trainer(sampler, slice_profile, net, optim, loss_func, args, i)
+    trainer.train()
+
+    result = trainer.predict(perm_image).detach().cpu().numpy().squeeze()
+    tmp_image = result
+
+    result = permute3d(result, x=inv_x, y=inv_y, z=inv_z)[0]
+    out = nib.Nifti1Image(result, affine, obj.header)
+    out.to_filename(args.result_filename + '%d.nii.gz' % i)
