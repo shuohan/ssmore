@@ -37,12 +37,10 @@ class Upsample(nn.Module):
         padding = 1 if use_padding else 0
         self.conv0 = nn.Conv2d(num_channels, scale * num_channels, 3,
                                padding=padding)
-        self.conv1 = nn.Conv2d(num_channels, 1, 1)
 
     def forward(self, x):
         out = self.conv0(x)
         out = pixel_shuffle(out, self.scale)
-        out = self.conv1(out)
         return out
 
 
@@ -58,6 +56,7 @@ class EDSR(nn.Module):
         for i in range(num_blocks):
             self.add_module('block%d' % i, ResBlock(num_channels, res_scale))
         self.up = Upsample(num_channels, scale)
+        self.conv = nn.Conv2d(num_channels, 1, 1)
 
         self.crop = 2 * (self.num_blocks + 1)
 
@@ -66,4 +65,5 @@ class EDSR(nn.Module):
         for i in range(self.num_blocks):
             out = getattr(self, 'block%d' % i)(out)
         out = self.up(out)
+        out = self.conv(out)
         return out

@@ -92,13 +92,14 @@ class RCAN(nn.Module):
     """Residual Channel Attention Network.
 
     """
-    def __init__(self, num_rg, num_rcab, num_channels, reduction, scale):
+    def __init__(self, num_rg, num_rcab, num_channels, reduction, scale, num_ag=0):
         super().__init__()
         self.num_rg = num_rg
         self.num_rcab = num_rcab
         self.num_channels = num_channels
         self.reduction = reduction
         self.scale = scale
+        self.num_ag = num_ag
 
         kernel_size = 3
         act = nn.ReLU(True)
@@ -114,6 +115,14 @@ class RCAN(nn.Module):
                                padding=padding)
         self.up = Upsample(num_channels, scale, use_padding=True)
 
+        for i in range(num_ag):
+            ag = RG(num_rcab, num_channels, kernel_size, reduction)
+            self.add_module('ag%d' % i, ag)
+        if num_ag > 0:
+            self.conv2 = nn.Conv2d(num_channels, num_channels, kernel_size,
+                                   padding=padding)
+
+        self.conv_end = nn.Conv2d(num_channels, 1, 1)
         self.crop_size = 0
 
     def forward(self, x):
@@ -124,6 +133,14 @@ class RCAN(nn.Module):
         res = self.conv1(res)
         out = res + x
         out = self.up(out)
+
+        res = out
+        for i in range(self.num_ag):
+            res = getattr(self, 'ag%d' % i)(res)
+        if self.num_ag > 0:
+            out = out + self.conv2(res)
+
+        out = self.conv_end(out)
         return out
 
     def crop(self, x):
