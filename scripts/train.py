@@ -18,6 +18,7 @@ parser.add_argument('-I', '--image-save-step', default=50, type=int)
 parser.add_argument('-W', '--num-channels-multiplier', default=8, type=int)
 parser.add_argument('-P', '--use-padding', action='store_true')
 parser.add_argument('-g', '--num-groups', default=4, type=int)
+parser.add_argument('-a', '--num-groups-after', default=2, type=int)
 parser.add_argument('-f', '--following-num-epochs', default=100, type=int)
 parser.add_argument('-S', '--iter-save-step', default=10, type=int)
 args = parser.parse_args()
@@ -66,7 +67,8 @@ args.hr_patch_size = patch_size
 
 save_args(args, args_filename)
 
-net = RCAN(args.num_groups, args.num_blocks, args.num_channels, 16, args.scale1)
+net = RCAN(args.num_groups, args.num_blocks, args.num_channels, 16, args.scale1,
+           num_ag=args.num_groups_after)
 net = net.cuda()
 optim = Adam(net.parameters(), lr=args.learning_rate)
 loss_func = L1Loss().cuda()
