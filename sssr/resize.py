@@ -15,7 +15,7 @@ def resize_pt(image, dxyz):
     ind_shape = [image.shape[0]] + [1] * (indices.ndim - 1)
     indices = indices.repeat(ind_shape)
     indices = indices.to(image)
-    result = F.grid_sample(image, indices, align_corners=True)
+    result = F.grid_sample(image, indices, align_corners=True, mode='bicubic')
     return result
 
 
