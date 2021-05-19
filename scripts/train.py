@@ -96,7 +96,8 @@ for i in range(args.num_iters):
     trainer.train()
 
     result = perm_image
-    for j in range(args.num_net_steps_pred):
+    num_net_steps_pred = args.num_net_steps if i < args.num_iters - 1 else args.num_net_steps_pred
+    for j in range(num_net_steps_pred):
         print('Predict', 'step', j, 'iter', i)
         apply_up = True if j == 0 else False
         result = trainer.predict(result, apply_up).detach().cpu().numpy().squeeze()

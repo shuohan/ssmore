@@ -28,7 +28,7 @@ num_steps=3
 num_steps_pred=10
 
 name=$(basename $image | sed "s/\.nii\.gz$//")
-output_dir=results_rcan_${name}_e${num_epochs}_b${batch_size}_nc${num_channels}_nb${num_blocks}_ng${num_groups}_ni${num_iters}_nf${following_num_epochs}_bicubic_na${num_after}_ns${num_steps}_np${num_steps_pred}
+output_dir=results_rcan_${name}_e${num_epochs}_b${batch_size}_nc${num_channels}_nb${num_blocks}_ng${num_groups}_ni${num_iters}_nf${following_num_epochs}_bicubic_na${num_after}_ns${num_steps}_np${num_steps_pred}_only-last-over-pred
 rm -rf $output_dir
 ../scripts/train.py -i $image -o $output_dir -e $num_epochs \
     -I $save_step -b $batch_size -d ${num_blocks} -w ${num_channels} \
