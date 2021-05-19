@@ -59,34 +59,43 @@ class Trainer(Subject):
         stop_ind = start_ind + self.batch_size 
         indices = self._indices[start_ind : stop_ind]
         batch = self.sampler.get_patches(indices)
-        self._names = batch.name
+        name = batch.name
 
-        self._extracted = batch.data
-        self._blur = F.conv2d(self._extracted, self.slice_profile)
-        self._lr = resize_pt(self._blur, (self.scale0 * self.scale1, 1))
-        self._input = resize_pt(self._lr, (1 / self.scale0, 1))
-        self._input_interp = self._interp_input(self._input)
-        self._hr_crop = self._crop_hr(self._extracted)
+        extracted = batch.data
+        blur = F.conv2d(extracted, self.slice_profile)
+        lr = resize_pt(blur, (self.scale0 * self.scale1, 1))
+        input = resize_pt(lr, (1 / self.scale0, 1))
+        input_interp = self._interp_input(input)
+        hr_crop = self._crop_hr(extracted, input.shape[2])
 
         self.optim.zero_grad()
-        self._output = self.net(self._input)
+        output = self.net(input)
 
-        # print('extracted', self._extracted.shape)
-        # print('blur', self._blur.shape)
-        # print('lr', self._lr.shape)
-        # print('input', self._input.shape)
-        # print('input_interp', self._input_interp.shape)
-        # print('hr', self._hr_crop.shape)
-        # print('output', self._output.shape)
+        # print('extracted', extracted.shape)
+        # print('blur', blur.shape)
+        # print('lr', lr.shape)
+        # print('input', input.shape)
+        # print('input_interp', input_interp.shape)
+        # print('hr', hr_crop.shape)
+        # print('output', output.shape)
 
-        self._loss = self.loss_func(self._output, self._hr_crop)
-        self._loss.backward()
+        loss = self.loss_func(output, hr_crop)
+        loss.backward()
         self.optim.step()
 
-    def _crop_hr(self, hr_batch):
+        self._set_tensor_cuda('extracted', extracted, name=name)
+        self._set_tensor_cuda('blur', blur, name=name)
+        self._set_tensor_cuda('lr', lr, name=name)
+        self._set_tensor_cuda('input', input, name=name)
+        self._set_tensor_cuda('input_interp', input_interp, name=name)
+        self._set_tensor_cuda('hr_crop', hr_crop, name=name)
+        self._set_tensor_cuda('output', output, name=name)
+        self._values['loss'] = loss
+
+    def _crop_hr(self, hr_batch, length):
         crop = (self.slice_profile.shape[2] - 1) // 2
         result = hr_batch[:, :, crop : -crop, ...]
-        size = self._input.shape[2] * self.scale1
+        size =  length * self.scale1
         result = result[:, :, :size, ...]
         result = self.net.crop(result)
         return result
@@ -130,70 +139,3 @@ class Trainer(Subject):
         result = (result1 + result0) / 2
 
         return result
-
-    def _convert_data(self, data):
-        # result = data / self._intensity_max
-        result = data
-        result = result.detach().cpu()
-        result = NamedData(self._names, result)
-        return result
-
-    @property
-    def extracted_cuda(self):
-        return self._extracted
-
-    @property
-    def extracted(self):
-        return self._convert_data(self._extracted)
-
-    @property
-    def blur_cuda(self):
-        return self._blur
-
-    @property
-    def blur(self):
-        return self._convert_data(self._blur)
-
-    @property
-    def lr_cuda(self):
-        return self._lr
-
-    @property
-    def lr(self):
-        return self._convert_data(self._lr)
-
-    @property
-    def hr_crop_cuda(self):
-        return self._hr_crop
-
-    @property
-    def hr_crop(self):
-        return self._convert_data(self._hr_crop)
-
-    @property
-    def input_cuda(self):
-        return self._input
-
-    @property
-    def input(self):
-        return self._convert_data(self._input)
-
-    @property
-    def input_interp_cuda(self):
-        return self._input_interp
-
-    @property
-    def input_interp(self):
-        return self._convert_data(self._input_interp)
-
-    @property
-    def output_cuda(self):
-        return self._output
-
-    @property
-    def output(self):
-        return self._convert_data(self._output)
-
-    @property
-    def loss(self):
-        return self._loss.item()
