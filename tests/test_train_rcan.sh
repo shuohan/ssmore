@@ -12,23 +12,26 @@ type=scale-4p9_fwhm-2p45
 image=/data/smore_simu_correct/simu_data/${type}/sub-OAS30167_ses-d0111_T1w_initnorm_${type}.nii.gz
 kernel=$(echo $image | sed "s/\.nii\.gz$/.npy/")
 
-num_epochs=10
-following_num_epochs=10
-save_step=2000
+num_epochs=10000
+following_num_epochs=100
+save_step=1000
 batch_size=16
 learning_rate=1e-4
 num_channels=64
 num_blocks=8
 num_groups=2
 patch_size=40
-num_iters=1
-iter_save_step=20
+num_iters=40
+iter_save_step=1
 num_after=0
+num_steps=3
+num_steps_pred=10
 
 name=$(basename $image | sed "s/\.nii\.gz$//")
-output_dir=results_rcan_${name}_e${num_epochs}_b${batch_size}_nc${num_channels}_nb${num_blocks}_ng${num_groups}_ni${num_iters}_nf${following_num_epochs}_bicubic_na${num_after}
+output_dir=results_rcan_${name}_e${num_epochs}_b${batch_size}_nc${num_channels}_nb${num_blocks}_ng${num_groups}_ni${num_iters}_nf${following_num_epochs}_bicubic_na${num_after}_ns${num_steps}_np${num_steps_pred}
 rm -rf $output_dir
 ../scripts/train.py -i $image -o $output_dir -e $num_epochs \
     -I $save_step -b $batch_size -d ${num_blocks} -w ${num_channels} \
     -g $num_groups -l $learning_rate -P -n $num_iters \
-    -f $following_num_epochs -S $iter_save_step -s $kernel -a $num_after
+    -f $following_num_epochs -S $iter_save_step -s $kernel -a $num_after \
+    -N $num_steps -t $num_steps_pred

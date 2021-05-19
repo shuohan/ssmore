@@ -21,6 +21,8 @@ parser.add_argument('-g', '--num-groups', default=4, type=int)
 parser.add_argument('-a', '--num-groups-after', default=2, type=int)
 parser.add_argument('-f', '--following-num-epochs', default=100, type=int)
 parser.add_argument('-S', '--iter-save-step', default=10, type=int)
+parser.add_argument('-N', '--num-net-steps', default=3, type=int)
+parser.add_argument('-t', '--num-net-steps-pred', default=5, type=int)
 args = parser.parse_args()
 
 
@@ -36,7 +38,7 @@ from sssr.models.edsr import EDSR
 from sssr.models.wdsr import WDSRB
 from sssr.models.rcan import RCAN
 from sssr.utils import calc_gaussian_slice_profie, get_axis_order, save_args
-from sssr.utils import calc_patch_size, L1SobelLoss
+from sssr.utils import calc_patch_size, L1SobelLoss, MultiL1Loss
 from sssr.build import build_sampler, build_trainer
 
 
@@ -71,7 +73,7 @@ net = RCAN(args.num_groups, args.num_blocks, args.num_channels, 16, args.scale1,
            num_ag=args.num_groups_after)
 net = net.cuda()
 optim = Adam(net.parameters(), lr=args.learning_rate)
-loss_func = L1Loss().cuda()
+loss_func = MultiL1Loss()# L1Loss().cuda()
 print(net)
 print(optim)
 print(loss_func)
@@ -93,10 +95,15 @@ for i in range(args.num_iters):
     trainer = build_trainer(sampler, slice_profile, net, optim, loss_func, args, i)
     trainer.train()
 
-    result = trainer.predict(perm_image).detach().cpu().numpy().squeeze()
-    tmp_image = result
+    result = perm_image
+    for j in range(args.num_net_steps_pred):
+        print('Predict', 'step', j, 'iter', i)
+        apply_up = True if j == 0 else False
+        result = trainer.predict(result, apply_up).detach().cpu().numpy().squeeze()
 
-    if i % args.iter_save_step == 0 or i == args.num_iters - 1:
-        result = permute3d(result, x=inv_x, y=inv_y, z=inv_z)[0]
-        out = nib.Nifti1Image(result, affine, obj.header)
-        out.to_filename(args.result_filename + '%d.nii.gz' % i)
+        if i % args.iter_save_step == 0 or i == args.num_iters - 1:
+            perm_result = permute3d(result, x=inv_x, y=inv_y, z=inv_z)[0]
+            out = nib.Nifti1Image(perm_result, affine, obj.header)
+            out.to_filename(args.result_filename + '_iter%d_step%d.nii.gz' % (i, j))
+
+    tmp_image = result
