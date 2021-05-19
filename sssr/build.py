@@ -55,7 +55,7 @@ def build_trainer(sampler, slice_profile, net, optim, loss_func, args, iter):
 
     trainer = Trainer(sampler, slice_profile, args.scale0, args.scale1,
                       net, optim, loss_func, batch_size=args.batch_size,
-                      num_epochs=num_epochs)
+                      num_epochs=num_epochs, num_steps=args.num_net_steps)
 
     if iter % args.iter_save_step == 0 or iter == args.num_iters - 1:
         queue = DataQueue(['loss'])
@@ -63,7 +63,10 @@ def build_trainer(sampler, slice_profile, net, optim, loss_func, args, iter):
         printer = EpochPrinter(print_sep=False)
         queue.register(logger)
         queue.register(printer)
-        attrs =  ['extracted', 'blur', 'lr', 'input_interp', 'output', 'hr_crop']
+        attrs =  ['extracted', 'blur', 'lr', 'input_interp']
+        for i in range(args.num_net_steps):
+            attrs.append('output%d' % i)
+        attrs.append('hr_crop')
         image_saver = ImageSaver(args.image_dirname + '%d' % iter, attrs=attrs,
                                  step=step, zoom=4, ordered=True,
                                  file_struct='epoch/sample', save_type='png_norm')

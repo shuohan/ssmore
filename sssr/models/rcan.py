@@ -100,6 +100,7 @@ class RCAN(nn.Module):
         self.reduction = reduction
         self.scale = scale
         self.num_ag = num_ag
+        self.apply_up = True
 
         kernel_size = 3
         act = nn.ReLU(True)
@@ -132,7 +133,8 @@ class RCAN(nn.Module):
             res = getattr(self, 'rg%d' % i)(res)
         res = self.conv1(res)
         out = res + x
-        out = self.up(out)
+        if self.apply_up:
+            out = self.up(out)
 
         res = out
         for i in range(self.num_ag):

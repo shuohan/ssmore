@@ -40,7 +40,8 @@ class Upsample(nn.Module):
 
     def forward(self, x):
         out = self.conv0(x)
-        out = pixel_shuffle(out, self.scale)
+        if self.scale > 1:
+            out = pixel_shuffle(out, self.scale)
         return out
 
 

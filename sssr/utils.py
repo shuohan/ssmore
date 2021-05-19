@@ -51,6 +51,14 @@ def pixel_shuffle(x, scale):
     return out
 
 
+class MultiL1Loss(nn.Module):
+    def forward(self, outputs, truth):
+        result = 0
+        for output in outputs:
+            result = result + F.l1_loss(output, truth)
+        return result / len(outputs)
+
+
 class L1SobelLoss(nn.Module):
     def __init__(self, sobel_lambda=0.5, l1_lambda=0.5, eps=1e-6):
         super().__init__()
