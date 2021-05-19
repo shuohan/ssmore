@@ -55,7 +55,9 @@ class MultiL1Loss(nn.Module):
     def forward(self, outputs, truth):
         result = 0
         for output in outputs:
-            result = result + F.l1_loss(output, truth)
+            errors = F.l1_loss(output, truth, reduction='none')
+            weights = truth / torch.mean(truth, (2, 3), keepdim=True)
+            result = result + torch.sum(errors / (weights + 1e-6))
         return result / len(outputs)
 
 
