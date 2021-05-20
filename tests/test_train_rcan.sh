@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-export PYTHONPATH=$HOME/Code/shuo/deep-networks/sssrlib:$HOME/Code/shuo/deep-networks/sssr:$HOME/Code/shuo/deep-networks/ptxl
+export PYTHONPATH=$HOME/Code/shuo/deep-networks/sssrlib:$HOME/Code/shuo/deep-networks/sssr:$HOME/Code/shuo/deep-networks/ptxl:$HOME/Code/shuo/utils/resize
 export CUDA_VISIBLE_DEVICES=0
 
 # image=/data/smore_simu/simu_data_2/sub-OAS30168_ses-d0059_T2w_initnorm_scale-3p5.nii.gz
@@ -12,8 +12,8 @@ type=scale-4p9_fwhm-2p45
 image=/data/smore_simu_correct/simu_data/${type}/sub-OAS30167_ses-d0111_T1w_initnorm_${type}.nii.gz
 kernel=$(echo $image | sed "s/\.nii\.gz$/.npy/")
 
-num_epochs=10
-following_num_epochs=10
+num_epochs=10000
+following_num_epochs=100
 save_step=2000
 batch_size=16
 learning_rate=1e-4
@@ -21,12 +21,12 @@ num_channels=64
 num_blocks=8
 num_groups=2
 patch_size=40
-num_iters=1
+num_iters=200
 iter_save_step=20
 num_after=0
 
 name=$(basename $image | sed "s/\.nii\.gz$//")
-output_dir=results_rcan_${name}_e${num_epochs}_b${batch_size}_nc${num_channels}_nb${num_blocks}_ng${num_groups}_ni${num_iters}_nf${following_num_epochs}_bicubic_na${num_after}
+output_dir=results_rcan_${name}_e${num_epochs}_b${batch_size}_nc${num_channels}_nb${num_blocks}_ng${num_groups}_ni${num_iters}_nf${following_num_epochs}_bicubic_na${num_after}_test
 rm -rf $output_dir
 ../scripts/train.py -i $image -o $output_dir -e $num_epochs \
     -I $save_step -b $batch_size -d ${num_blocks} -w ${num_channels} \

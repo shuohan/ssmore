@@ -8,39 +8,6 @@ from torch import nn
 from .resize import resize_pt
 
 
-def fwhm_to_std(fwhm):
-    return fwhm / (2 * np.sqrt(2 * np.log(2)))
-
-
-def calc_gaussian_slice_profie(scale):
-    std = fwhm_to_std(scale)
-    length = int(2 * round(scale) + 1)
-    sp = gaussian(length, std)
-    sp = sp / sp.sum()
-    return sp
-
-
-def get_axis_order(voxel_size):
-    z = np.argmax(voxel_size)
-    xy = list(range(len(voxel_size)))
-    xy.remove(z)
-    return int(xy[0]), int(xy[1]), int(z)
-
-
-def save_args(args, filename):
-    result = dict()
-    for arg in vars(args):
-        result[arg] = getattr(args, arg)
-    with open(filename, 'w') as jfile:
-        json.dump(result, jfile, indent=4)
-
-
-def calc_patch_size(lr_patch_size, sp_len, scale1):
-    ps0 = lr_patch_size[0] * scale1 + sp_len
-    ps1 = lr_patch_size[1] # * scale1
-    return [ps0, ps1, 1]
-
-
 def pixel_shuffle(x, scale):
     """https://gist.github.com/davidaknowles/6e95a643adaf3960d1648a6b369e9d0b"""
     num_batches, num_channels, nx, ny = x.shape
