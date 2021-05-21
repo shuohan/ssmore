@@ -95,14 +95,13 @@ class RCAN(nn.Module):
 
     """
     def __init__(self, num_rg, num_rcab, num_channels, reduction, scale,
-                 num_ag=0, same_fov=True):
+                 num_ag=0):
         super().__init__()
         self.num_rg = num_rg
         self.num_rcab = num_rcab
         self.num_channels = num_channels
         self.reduction = reduction
         self.scale = scale
-        self.same_fov = same_fov
         self._scale1 = int(self.scale)
         self._scale0 = self.scale / float(self._scale1)
         self.num_ag = num_ag
@@ -138,8 +137,7 @@ class RCAN(nn.Module):
         return patch_size
 
     def forward(self, x):
-        x = resize(x, (1 / self._scale0, 1), mode='bicubic',
-                   same_fov=self.same_fov)
+        x = resize(x, (1 / self._scale0, 1), mode='bicubic')
 
         x = self.conv0(x)
         res = x

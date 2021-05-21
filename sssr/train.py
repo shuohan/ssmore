@@ -52,8 +52,7 @@ class Trainer:
         if self.args.network.lower() == 'rcan':
             self.net = RCAN(self.args.num_groups, self.args.num_blocks,
                             self.args.num_channels, 16, self.args.scale,
-                            num_ag=self.args.num_groups_after,
-                            same_fov=(not self.args.align_first)).cuda()
+                            num_ag=self.args.num_groups_after).cuda()
         else:
             raise NotImplementedError
 
@@ -286,16 +285,14 @@ class _Trainer(Subject):
 
         extracted = batch.data
         blur = F.conv2d(extracted, self.slice_profile)
-        lr = resize(blur, (self.scale, 1), mode='bicubic',
-                    same_fov=self.net.same_fov)
+        lr = resize(blur, (self.scale, 1), mode='bicubic')
 
         self.optim.zero_grad()
         output = self.net(lr)
 
         hr_crop = self._crop_hr(extracted, output.shape[2:])
         lr_interp = resize(lr, (1 / self.scale, 1), mode='bicubic',
-                           target_shape=output.shape[2:],
-                           same_fov=self.net.same_fov)
+                           target_shape=output.shape[2:])
 
         # print('extracted', extracted.shape)
         # print('blur', blur.shape)
@@ -320,5 +317,4 @@ class _Trainer(Subject):
         left_crop = (self.slice_profile.shape[2] - 1) // 2
         right_crop = self.slice_profile.shape[2] - 1 - left_crop
         result = hr_batch[:, :, left_crop : -right_crop, ...]
-        return resize(result, (1, 1), target_shape=output_shape,
-                      same_fov=self.net.same_fov)
+        return resize(result, (1, 1), target_shape=output_shape)
