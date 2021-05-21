@@ -41,12 +41,19 @@ class Trainer:
         self._specify_outputs()
         self._save_args()
 
+        self._is_predicted = False
+        self._pred = None
+
     def train(self):
         for self._iter_ind in range(self.args.num_iters):
             self._sampler = self._build_sampler()
             self._trainer = self._build_trainer()
             self._trainer.train()
             self._predict()
+
+    @property
+    def is_predicted(self):
+        return self._is_predicted
 
     def _create_net(self):
         if self.args.network.lower() == 'rcan':
@@ -140,12 +147,13 @@ class Trainer:
         return sampler
 
     def _build_patches(self, orient='xy'):
+        image = self._pred if self._pred is not None else self._image
         if orient == 'xy':
-            patches = Patches(self.args.hr_patch_size, self._image,
+            patches = Patches(self.args.hr_patch_size, image,
                               voxel_size=self.args.voxel_size, x=self.args.x,
                               y=self.args.y, z=self.args.z).cuda()
         elif orient == 'yx':
-            patches = Patches(self.args.hr_patch_size, self._image,
+            patches = Patches(self.args.hr_patch_size, image,
                               voxel_size=self.args.voxel_size, x=self.args.y,
                               y=self.args.x, z=self.args.z).cuda()
         return patches
@@ -221,7 +229,9 @@ class Trainer:
         result = (result1 + result0) / 2
 
         result = result.detach().cpu().numpy().squeeze()
-        result = permute3d(result, x=inv_x, y=inv_y, z=inv_z)[0]
+        self._pred = permute3d(result, x=inv_x, y=inv_y, z=inv_z)[0]
+        self._is_predicted = True
+
         out = nib.Nifti1Image(result, self._output_affine, self._output_header)
         filename = (self._iter_pattern % (self._iter_ind + 1)) + '.nii.gz'
         filename = Path(self.args.result_dirname, filename)

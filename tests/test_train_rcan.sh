@@ -8,7 +8,7 @@ export CUDA_VISIBLE_DEVICES=0
 # image=/data/smore_simu_correct/simu_data/scale-4p9_fwhm-2p45/sub-OAS30167_ses-d0111_T1w_initnorm_scale-4p9_fwhm-2p45.nii.gz
 # image=/data/smore_simu_correct/simu_data/scale-4p9_fwhm-2p45/sub-OAS30167_ses-d0111_T1w_initnorm_scale-4p9_fwhm-2p45.nii.gz
 # image=/data/smore_simu_correct/simu_data/scale-2p0_fwhm-2p0/sub-OAS30167_ses-d0111_T1w_initnorm_scale-2p0_fwhm-2p0.nii.gz
-type=scale-4p9_fwhm-2p45
+type=scale-4p9_fwhm-6p125
 image=/data/smore_simu_same_fov/simu_data/${type}/sub-OAS30167_ses-d0111_T1w_initnorm_${type}.nii.gz
 kernel=$(echo $image | sed "s/\.nii\.gz$/.npy/")
 
@@ -21,12 +21,12 @@ num_channels=64
 num_blocks=8
 num_groups=2
 patch_size=40
-num_iters=1
-iter_save_step=20
+num_iters=10
+iter_save_step=1
 
 name=$(basename $image | sed "s/\.nii\.gz$//")
-# output_dir=results_rcan_${name}_e${num_epochs}_b${batch_size}_nc${num_channels}_nb${num_blocks}_ng${num_groups}_ni${num_iters}_nf${following_num_epochs}_bicubic_test
-output_dir=test
+output_dir=results_rcan_${name}_e${num_epochs}_b${batch_size}_nc${num_channels}_nb${num_blocks}_ng${num_groups}_ni${num_iters}_nf${following_num_epochs}_bicubic_test_lr${learning_rate}
+# output_dir=test
 rm -rf $output_dir
 ../scripts/train.py -i $image -o $output_dir -e $num_epochs \
     -I $save_step -b $batch_size -d ${num_blocks} -w ${num_channels} \
