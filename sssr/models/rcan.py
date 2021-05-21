@@ -1,7 +1,9 @@
 """Modified from https://github.com/yulunzhang/RCAN
 
 """
+import torch
 from torch import nn
+from resize.pt import resize
 
 from .edsr import Upsample
 
@@ -92,13 +94,17 @@ class RCAN(nn.Module):
     """Residual Channel Attention Network.
 
     """
-    def __init__(self, num_rg, num_rcab, num_channels, reduction, scale, num_ag=0):
+    def __init__(self, num_rg, num_rcab, num_channels, reduction, scale,
+                 num_ag=0, same_fov=True):
         super().__init__()
         self.num_rg = num_rg
         self.num_rcab = num_rcab
         self.num_channels = num_channels
         self.reduction = reduction
         self.scale = scale
+        self.same_fov = same_fov
+        self._scale1 = int(self.scale)
+        self._scale0 = self.scale / float(self._scale1)
         self.num_ag = num_ag
 
         kernel_size = 3
@@ -113,7 +119,7 @@ class RCAN(nn.Module):
 
         self.conv1 = nn.Conv2d(num_channels, num_channels, kernel_size,
                                padding=padding)
-        self.up = Upsample(num_channels, scale, use_padding=True)
+        self.up = Upsample(num_channels, self._scale1, use_padding=True)
 
         for i in range(num_ag):
             ag = RG(num_rcab, num_channels, kernel_size, reduction)
@@ -123,9 +129,18 @@ class RCAN(nn.Module):
                                    padding=padding)
 
         self.conv_end = nn.Conv2d(num_channels, 1, 1)
-        self.crop_size = 0
+
+    def calc_out_patch_size(self, input_patch_size):
+        x = torch.rand([1, 1] + input_patch_size).float()
+        x = x.to(next(self.parameters()).device)
+        out = self(x)
+        patch_size = tuple(out.shape[2:])
+        return patch_size
 
     def forward(self, x):
+        x = resize(x, (1 / self._scale0, 1), mode='bicubic',
+                   same_fov=self.same_fov)
+
         x = self.conv0(x)
         res = x
         for i in range(self.num_rg):
@@ -142,6 +157,3 @@ class RCAN(nn.Module):
 
         out = self.conv_end(out)
         return out
-
-    def crop(self, x):
-        return x

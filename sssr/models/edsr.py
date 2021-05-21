@@ -7,7 +7,7 @@ This code is modified from
 """
 from torch import nn
 
-from ..utils import pixel_shuffle
+from .utils import pixel_shuffle
 
 
 class ResBlock(nn.Module):

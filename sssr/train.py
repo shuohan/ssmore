@@ -29,10 +29,17 @@ class Trainer:
     def __init__(self, args):
         super().__init__()
         self.args = args
-        self._parse_args()
+
+        self._parse_image()
+        self._load_slice_profile()
         self._create_net()
         self._create_optim()
         self._create_loss_func()
+
+        self._calc_hr_patch_size()
+        self._get_iter_pattern()
+        self._specify_outputs()
+        self._save_args()
 
     def train(self):
         for self._iter_ind in range(self.args.num_iters):
@@ -41,19 +48,12 @@ class Trainer:
             self._trainer.train()
             self._predict()
 
-    def _parse_args(self):
-        self._specify_outputs()
-        self._load_slice_profile()
-        self._parse_image()
-        self._calc_hr_patch_size()
-        self._save_args()
-        self._get_iter_pattern()
-
     def _create_net(self):
         if self.args.network.lower() == 'rcan':
             self.net = RCAN(self.args.num_groups, self.args.num_blocks,
-                            self.args.num_channels, 16, self.args.scale1,
-                            num_ag=self.args.num_groups_after).cuda()
+                            self.args.num_channels, 16, self.args.scale,
+                            num_ag=self.args.num_groups_after,
+                            same_fov=(not self.args.align_first)).cuda()
         else:
             raise NotImplementedError
 
@@ -86,8 +86,6 @@ class Trainer:
         self._image = obj.get_fdata(dtype=np.float32)
         self._get_axis_order()
         self.args.scale = float(self.args.voxel_size[self.args.z])
-        self.args.scale1 = int(self.args.scale)
-        self.args.scale0 = self.args.scale / float(self.args.scale1)
         self._calc_output_affine(obj.affine)
         self._output_header = obj.header
 
@@ -122,10 +120,10 @@ class Trainer:
         return slice_profile
 
     def _calc_hr_patch_size(self):
-        sp_len = self._slice_profile.shape[2]
-        ps0 = self.args.patch_size[0] * self.args.scale1 + sp_len
-        ps1 = self.args.patch_size[1]
-        self.args.hr_patch_size = (ps0, ps1, 1)
+        slice_profile_len = self._slice_profile.shape[2]
+        hr_patch_size = list(self.net.calc_out_patch_size(self.args.patch_size))
+        hr_patch_size[0] += slice_profile_len - 1
+        self.args.hr_patch_size = tuple(hr_patch_size) + (1, )
 
     def _save_args(self):
         result = dict()
@@ -166,10 +164,9 @@ class Trainer:
         num_epochs = self._get_num_epochs()
         save_step = min(self.args.image_save_step, num_epochs)
 
-        trainer = _Trainer(self._sampler, self._slice_profile, self.args.scale0,
-                           self.args.scale1, self.net, self.optim,
-                           self.loss_func, batch_size=self.args.batch_size,
-                           num_epochs=num_epochs)
+        trainer = _Trainer(self._sampler, self._slice_profile, self.args.scale,
+                           self.net, self.optim, self.loss_func,
+                           batch_size=self.args.batch_size, num_epochs=num_epochs)
         queue = DataQueue(['loss'])
         printer = EpochPrinter(print_sep=False)
         filename = (self._iter_pattern % (self._iter_ind + 1)) + '.csv'
@@ -177,7 +174,7 @@ class Trainer:
         queue.register(logger)
         queue.register(printer)
 
-        attrs =  ['extracted', 'blur', 'lr', 'input_interp', 'output', 'hr_crop']
+        attrs =  ['extracted', 'blur', 'lr', 'lr_interp', 'output', 'hr_crop']
         filename = (self._iter_pattern % (self._iter_ind + 1))
         filename = Path(self.args.patches_dirname, filename)
         image_saver = ImageSaver(filename, attrs=attrs,
@@ -205,18 +202,13 @@ class Trainer:
     def _predict(self):
         image, inv_x, inv_y, inv_z = permute3d(self._image, x=self.args.x,
                                                y=self.args.y, z=self.args.z)
-
         image = torch.tensor(image).float().cuda()[None, None, ...]
-        padding = self.net.crop_size
-        padding = (padding, padding, padding, padding)
 
         result0 = list()
         with torch.no_grad():
             for i in range(image.shape[2]):
                 batch = image[:, :, i, ...].permute(0, 1, 3, 2)
-                interp = resize(batch, (1/self.args.scale0, 1), mode='bicubic')
-                padded = F.pad(interp, padding, mode='replicate')
-                sr = self.net(padded)
+                sr = self.net(batch)
                 result0.append(sr.permute(0, 1, 3, 2))
         result0 = torch.stack(result0, dim=2)
 
@@ -224,9 +216,7 @@ class Trainer:
         with torch.no_grad():
             for i in range(image.shape[3]):
                 batch = image[:, :, :, i, :].permute(0, 1, 3, 2)
-                interp = resize(batch, (1/self.args.scale0, 1), mode='bicubic')
-                padded = F.pad(interp, padding, mode='replicate')
-                sr = self.net(padded)
+                sr = self.net(batch)
                 result1.append(sr.permute(0, 1, 3, 2))
         result1 = torch.stack(result1, dim=3)
 
@@ -241,13 +231,12 @@ class Trainer:
 
 
 class _Trainer(Subject):
-    def __init__(self, sampler, slice_profile, scale0, scale1,
+    def __init__(self, sampler, slice_profile, scale,
                  net, optim, loss_func, batch_size=16, num_epochs=100):
         super().__init__()
         self.sampler = sampler
         self.slice_profile = slice_profile
-        self.scale0 = scale0
-        self.scale1 = scale1
+        self.scale = scale
         self.net = net
         self.optim = optim
         self.loss_func = loss_func
@@ -297,21 +286,23 @@ class _Trainer(Subject):
 
         extracted = batch.data
         blur = F.conv2d(extracted, self.slice_profile)
-        lr = resize(blur, (self.scale0 * self.scale1, 1), mode='bicubic')
-        input = resize(lr, (1 / self.scale0, 1), mode='bicubic')
-        input_interp = self._interp_input(input)
-        hr_crop = self._crop_hr(extracted, input.shape[2])
+        lr = resize(blur, (self.scale, 1), mode='bicubic',
+                    same_fov=self.net.same_fov)
 
         self.optim.zero_grad()
-        output = self.net(input)
+        output = self.net(lr)
+
+        hr_crop = self._crop_hr(extracted, output.shape[2:])
+        lr_interp = resize(lr, (1 / self.scale, 1), mode='bicubic',
+                           target_shape=output.shape[2:],
+                           same_fov=self.net.same_fov)
 
         # print('extracted', extracted.shape)
         # print('blur', blur.shape)
         # print('lr', lr.shape)
-        # print('input', input.shape)
-        # print('input_interp', input_interp.shape)
-        # print('hr', hr_crop.shape)
+        # print('lr_interp', lr_interp.shape)
         # print('output', output.shape)
+        # print('hr', hr_crop.shape)
 
         loss = self.loss_func(output, hr_crop)
         loss.backward()
@@ -320,22 +311,14 @@ class _Trainer(Subject):
         self._set_tensor_cuda('extracted', extracted, name=name)
         self._set_tensor_cuda('blur', blur, name=name)
         self._set_tensor_cuda('lr', lr, name=name)
-        self._set_tensor_cuda('input', input, name=name)
-        self._set_tensor_cuda('input_interp', input_interp, name=name)
-        self._set_tensor_cuda('hr_crop', hr_crop, name=name)
         self._set_tensor_cuda('output', output, name=name)
+        self._set_tensor_cuda('lr_interp', lr_interp, name=name)
+        self._set_tensor_cuda('hr_crop', hr_crop, name=name)
         self._values['loss'] = loss
 
-    def _crop_hr(self, hr_batch, length):
-        crop = (self.slice_profile.shape[2] - 1) // 2
-        result = hr_batch[:, :, crop : -crop, ...]
-        size =  length * self.scale1
-        result = result[:, :, :size, ...]
-        result = self.net.crop(result)
-        return result
-
-    def _interp_input(self, input_batch):
-        result = resize(input_batch, (1 / self.scale1, 1), mode='bicubic')
-        result = F.pad(result, (0, 0, 0, self.scale1 - 1), mode='replicate')
-        result = self.net.crop(result)
-        return result
+    def _crop_hr(self, hr_batch, output_shape):
+        left_crop = (self.slice_profile.shape[2] - 1) // 2
+        right_crop = self.slice_profile.shape[2] - 1 - left_crop
+        result = hr_batch[:, :, left_crop : -right_crop, ...]
+        return resize(result, (1, 1), target_shape=output_shape,
+                      same_fov=self.net.same_fov)

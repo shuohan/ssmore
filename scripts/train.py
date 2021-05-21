@@ -7,7 +7,7 @@ desc = 'Self-supervised super-resolution.'
 parser = argparse.ArgumentParser(description=desc)
 parser.add_argument('-i', '--image')
 parser.add_argument('-o', '--output-dir')
-parser.add_argument('-p', '--patch-size', default=[40, 40], type=int, nargs=2)
+parser.add_argument('-p', '--patch-size', default=[32, 32], type=int, nargs=2)
 parser.add_argument('-s', '--slice-profile', default='gaussian')
 parser.add_argument('-d', '--num-blocks', default=8, type=int)
 parser.add_argument('-w', '--num-channels', default=256, type=int)
@@ -25,6 +25,7 @@ parser.add_argument('-S', '--iter-save-step', default=10, type=int)
 parser.add_argument('-O', '--optim', default='adam')
 parser.add_argument('-L', '--loss-func', default='l1')
 parser.add_argument('-N', '--network', default='rcan')
+parser.add_argument('-A', '--align-first', action='store_true')
 args = parser.parse_args()
 
 
