@@ -13,20 +13,20 @@ image=/data/smore_simu_same_fov/simu_data/${type}/sub-OAS30167_ses-d0111_T1w_ini
 kernel=$(echo $image | sed "s/\.nii\.gz$/.npy/")
 
 num_epochs=10000
-following_num_epochs=100
+following_num_epochs=1000
 save_step=1000
 batch_size=16
-learning_rate=1e-4
+learning_rate=5e-4
 num_channels=64
 num_blocks=8
 num_groups=2
 patch_size=40
-num_iters=1
-iter_save_step=20
+num_iters=20
+iter_save_step=1
 
 name=$(basename $image | sed "s/\.nii\.gz$//")
-# output_dir=results_rcan_${name}_e${num_epochs}_b${batch_size}_nc${num_channels}_nb${num_blocks}_ng${num_groups}_ni${num_iters}_nf${following_num_epochs}_bicubic_test
-output_dir=test
+output_dir=results_rcan_${name}_e${num_epochs}_b${batch_size}_nc${num_channels}_nb${num_blocks}_ng${num_groups}_ni${num_iters}_nf${following_num_epochs}_bicubic_lr-${learning_rate}
+# output_dir=test
 rm -rf $output_dir
 ../scripts/train.py -i $image -o $output_dir -e $num_epochs \
     -I $save_step -b $batch_size -d ${num_blocks} -w ${num_channels} \

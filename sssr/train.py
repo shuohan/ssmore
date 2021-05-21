@@ -11,9 +11,10 @@ from sssrlib.patches import Patches, TransformedPatches
 from sssrlib.sample import Sampler, SamplerCollection
 from sssrlib.transform import Flip
 
-from ptxl.save import ImageSaver 
+from ptxl.save import ImageSaver
 from ptxl.log import EpochLogger, EpochPrinter, DataQueue
 from ptxl.observer import Subject, Observer, SubjectObserver
+from ptxl.save import ThreadedSaver, ImageThread
 from ptxl.utils import NamedData
 from resize.pt import resize
 from improc3d import permute3d
@@ -22,7 +23,8 @@ from .models.rcan import RCAN
 
 
 def build_trainer(args):
-    return Trainer(args)
+    trainer = Trainer(args)
+    return trainer
 
 
 class Trainer:
@@ -37,16 +39,24 @@ class Trainer:
         self._create_loss_func()
 
         self._calc_hr_patch_size()
-        self._get_iter_pattern()
         self._specify_outputs()
         self._save_args()
+
 
     def train(self):
         for self._iter_ind in range(self.args.num_iters):
             self._sampler = self._build_sampler()
             self._trainer = self._build_trainer()
             self._trainer.train()
-            self._predict()
+
+    @property
+    def iter_str(self):
+        pattern = 'iter%%0%dd' % len(str(self.args.num_iters))
+        return pattern % (self._iter_ind + 1)
+
+    @property
+    def image(self):
+        return self._image
 
     def _create_net(self):
         if self.args.network.lower() == 'rcan':
@@ -167,14 +177,13 @@ class Trainer:
                            num_epochs=num_epochs)
         queue = DataQueue(['loss'])
         printer = EpochPrinter(print_sep=False)
-        filename = (self._iter_pattern % (self._iter_ind + 1)) + '.csv'
+        filename = self.iter_str + '.csv'
         logger = EpochLogger(Path(self.args.log_dirname, filename))
         queue.register(logger)
         queue.register(printer)
 
         attrs =  ['hr', 'blur', 'lr', 'lr_interp', 'output', 'hr_crop']
-        filename = (self._iter_pattern % (self._iter_ind + 1))
-        filename = Path(self.args.patches_dirname, filename)
+        filename = Path(self.args.patches_dirname, self.iter_str)
         image_saver = ImageSaver(filename, attrs=attrs,
                                  step=self.args.image_save_step, zoom=4,
                                  ordered=True, file_struct='epoch/sample',
@@ -182,10 +191,14 @@ class Trainer:
         trainer.register(queue)
         trainer.register(image_saver)
 
-        return trainer
+        predictor = _Predictor(self.args.result_dirname,
+                               self.iter_str, 1000,
+                               self._output_affine, self._output_header,
+                               self.args.x, self.args.y, self.args.z,
+                               self.image)
+        trainer.register(predictor)
 
-    def _get_iter_pattern(self):
-        self._iter_pattern = 'iter%%0%dd' % len(str(self.args.num_iters))
+        return trainer
 
     def _get_num_epochs(self):
         if self._iter_ind == 0:
@@ -196,36 +209,6 @@ class Trainer:
     def cont(self, ckpt):
         self.net.load_state_dict(ckpt['model_state_dict'])
         self.optim.load_state_dict(ckpt['optim_state_dict'])
-
-    def _predict(self):
-        x, y, z = self.args.x, self.args.y, self.args.z
-        image, inv_x, inv_y, inv_z = permute3d(self._image, x=x, y=y, z=z)
-        image = torch.tensor(image).float().cuda()[None, None, ...]
-
-        result0 = list()
-        with torch.no_grad():
-            for i in range(image.shape[2]):
-                batch = image[:, :, i, ...].permute(0, 1, 3, 2)
-                sr = self.net(batch)
-                result0.append(sr.permute(0, 1, 3, 2))
-        result0 = torch.stack(result0, dim=2)
-
-        result1 = list()
-        with torch.no_grad():
-            for i in range(image.shape[3]):
-                batch = image[:, :, :, i, :].permute(0, 1, 3, 2)
-                sr = self.net(batch)
-                result1.append(sr.permute(0, 1, 3, 2))
-        result1 = torch.stack(result1, dim=3)
-
-        result = (result1 + result0) / 2
-
-        result = result.detach().cpu().numpy().squeeze()
-        result = permute3d(result, x=inv_x, y=inv_y, z=inv_z)[0]
-        out = nib.Nifti1Image(result, self._output_affine, self._output_header)
-        filename = (self._iter_pattern % (self._iter_ind + 1)) + '.nii.gz'
-        filename = Path(self.args.result_dirname, filename)
-        out.to_filename(filename)
 
 
 class _Trainer(Subject):
@@ -279,7 +262,7 @@ class _Trainer(Subject):
         self.optim.zero_grad()
 
         start_ind = self._epoch_ind * self.batch_size
-        stop_ind = start_ind + self.batch_size 
+        stop_ind = start_ind + self.batch_size
         indices = self._indices[start_ind : stop_ind]
         batch = self.sampler.get_patches(indices)
 
@@ -308,3 +291,62 @@ class _Trainer(Subject):
         right_crop = self.slice_profile.shape[2] - 1 - left_crop
         result = hr[:, :, left_crop : -right_crop, ...]
         return resize(result, (1, 1), target_shape=target_shape)
+
+
+class PredSaver:
+    def __init__(self, affine, header):
+        self.affine = affine
+        self.header = header
+
+    def save(self, filename, data):
+        out = nib.Nifti1Image(data, self.affine, self.header)
+        out.to_filename(filename)
+
+
+class _Predictor(ThreadedSaver):
+    def __init__(self, dirname, filename, step, affine, header, x, y, z, image, save_init=False):
+        self.saver = PredSaver(affine, header)
+        self.x = x
+        self.y = y
+        self.z = z
+        self.image = image
+        self.filename = filename
+        super().__init__(dirname, step=step, save_init=save_init)
+
+    def _init_thread(self):
+        return ImageThread(self.saver, self.queue)
+
+    def update_on_epoch_end(self):
+        if self._need_to_save():
+            self._predict()
+
+    def _predict(self):
+        x, y, z = self.x, self.y, self.z
+        image, ix, iy, iz = permute3d(self.image, x=x, y=y, z=z)
+        image = torch.tensor(image).float().cuda()[None, None, ...]
+
+        result0 = list()
+        with torch.no_grad():
+            for i in range(image.shape[2]):
+                batch = image[:, :, i, ...].permute(0, 1, 3, 2)
+                sr = self.subject.net(batch)
+                result0.append(sr.permute(0, 1, 3, 2))
+        result0 = torch.stack(result0, dim=2)
+
+        result1 = list()
+        with torch.no_grad():
+            for i in range(image.shape[3]):
+                batch = image[:, :, :, i, :].permute(0, 1, 3, 2)
+                sr = self.subject.net(batch)
+                result1.append(sr.permute(0, 1, 3, 2))
+        result1 = torch.stack(result1, dim=3)
+
+        result = (result1 + result0) / 2
+
+        result = result.detach().cpu().numpy().squeeze()
+        result = permute3d(result, x=ix, y=iy, z=iz)[0]
+
+        epoch_pattern = '_epoch%%0%dd' % len(str(self.subject.num_epochs))
+        epoch = epoch_pattern % self.subject.epoch_ind
+        filename = Path(self.dirname, self.filename + epoch + '.nii.gz')
+        self.queue.put(NamedData(name=filename, data=result))
