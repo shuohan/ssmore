@@ -163,7 +163,8 @@ class Trainer:
 
         trainer = _Trainer(self._sampler, self._slice_profile, self.args.scale,
                            self.net, self.optim, self.loss_func,
-                           batch_size=self.args.batch_size, num_epochs=num_epochs)
+                           batch_size=self.args.batch_size,
+                           num_epochs=num_epochs)
         queue = DataQueue(['loss'])
         printer = EpochPrinter(print_sep=False)
         filename = (self._iter_pattern % (self._iter_ind + 1)) + '.csv'
@@ -171,7 +172,7 @@ class Trainer:
         queue.register(logger)
         queue.register(printer)
 
-        attrs =  ['extracted', 'blur', 'lr', 'lr_interp', 'output', 'hr_crop']
+        attrs =  ['hr', 'blur', 'lr', 'lr_interp', 'output', 'hr_crop']
         filename = (self._iter_pattern % (self._iter_ind + 1))
         filename = Path(self.args.patches_dirname, filename)
         image_saver = ImageSaver(filename, attrs=attrs,
@@ -197,8 +198,8 @@ class Trainer:
         self.optim.load_state_dict(ckpt['optim_state_dict'])
 
     def _predict(self):
-        image, inv_x, inv_y, inv_z = permute3d(self._image, x=self.args.x,
-                                               y=self.args.y, z=self.args.z)
+        x, y, z = self.args.x, self.args.y, self.args.z
+        image, inv_x, inv_y, inv_z = permute3d(self._image, x=x, y=y, z=z)
         image = torch.tensor(image).float().cuda()[None, None, ...]
 
         result0 = list()
@@ -228,8 +229,8 @@ class Trainer:
 
 
 class _Trainer(Subject):
-    def __init__(self, sampler, slice_profile, scale,
-                 net, optim, loss_func, batch_size=16, num_epochs=100):
+    def __init__(self, sampler, slice_profile, scale, net, optim, loss_func,
+                 batch_size=16, num_epochs=100):
         super().__init__()
         self.sampler = sampler
         self.slice_profile = slice_profile
@@ -275,44 +276,35 @@ class _Trainer(Subject):
         self.notify_observers_on_train_end()
 
     def _train_on_batch(self):
+        self.optim.zero_grad()
+
         start_ind = self._epoch_ind * self.batch_size
         stop_ind = start_ind + self.batch_size 
         indices = self._indices[start_ind : stop_ind]
         batch = self.sampler.get_patches(indices)
-        name = batch.name
 
-        extracted = batch.data
-        blur = F.conv2d(extracted, self.slice_profile)
+        blur = F.conv2d(batch.data, self.slice_profile)
         lr = resize(blur, (self.scale, 1), mode='bicubic')
-
-        self.optim.zero_grad()
         output = self.net(lr)
 
-        hr_crop = self._crop_hr(extracted, output.shape[2:])
+        hr_crop = self._crop_hr(batch.data, output.shape[2:])
         lr_interp = resize(lr, (1 / self.scale, 1), mode='bicubic',
                            target_shape=output.shape[2:])
-
-        # print('extracted', extracted.shape)
-        # print('blur', blur.shape)
-        # print('lr', lr.shape)
-        # print('lr_interp', lr_interp.shape)
-        # print('output', output.shape)
-        # print('hr', hr_crop.shape)
 
         loss = self.loss_func(output, hr_crop)
         loss.backward()
         self.optim.step()
 
-        self._set_tensor_cuda('extracted', extracted, name=name)
-        self._set_tensor_cuda('blur', blur, name=name)
-        self._set_tensor_cuda('lr', lr, name=name)
-        self._set_tensor_cuda('output', output, name=name)
-        self._set_tensor_cuda('lr_interp', lr_interp, name=name)
-        self._set_tensor_cuda('hr_crop', hr_crop, name=name)
+        self._set_tensor_cuda('hr', batch.data, name=batch.name)
+        self._set_tensor_cuda('blur', blur, name=batch.name)
+        self._set_tensor_cuda('lr', lr, name=batch.name)
+        self._set_tensor_cuda('lr_interp', lr_interp, name=batch.name)
+        self._set_tensor_cuda('output', output, name=batch.name)
+        self._set_tensor_cuda('hr_crop', hr_crop, name=batch.name)
         self._values['loss'] = loss
 
-    def _crop_hr(self, hr_batch, output_shape):
+    def _crop_hr(self, hr, target_shape):
         left_crop = (self.slice_profile.shape[2] - 1) // 2
         right_crop = self.slice_profile.shape[2] - 1 - left_crop
-        result = hr_batch[:, :, left_crop : -right_crop, ...]
-        return resize(result, (1, 1), target_shape=output_shape)
+        result = hr[:, :, left_crop : -right_crop, ...]
+        return resize(result, (1, 1), target_shape=target_shape)
