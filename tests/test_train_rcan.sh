@@ -23,13 +23,12 @@ num_groups=2
 patch_size=40
 num_iters=1
 iter_save_step=20
-num_after=0
 
 name=$(basename $image | sed "s/\.nii\.gz$//")
-# output_dir=results_rcan_${name}_e${num_epochs}_b${batch_size}_nc${num_channels}_nb${num_blocks}_ng${num_groups}_ni${num_iters}_nf${following_num_epochs}_bicubic_na${num_after}_test
+# output_dir=results_rcan_${name}_e${num_epochs}_b${batch_size}_nc${num_channels}_nb${num_blocks}_ng${num_groups}_ni${num_iters}_nf${following_num_epochs}_bicubic_test
 output_dir=test
 rm -rf $output_dir
 ../scripts/train.py -i $image -o $output_dir -e $num_epochs \
     -I $save_step -b $batch_size -d ${num_blocks} -w ${num_channels} \
     -g $num_groups -l $learning_rate -P -n $num_iters \
-    -f $following_num_epochs -S $iter_save_step -s $kernel -a $num_after
+    -f $following_num_epochs -S $iter_save_step -s $kernel

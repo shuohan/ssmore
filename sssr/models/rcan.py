@@ -94,8 +94,7 @@ class RCAN(nn.Module):
     """Residual Channel Attention Network.
 
     """
-    def __init__(self, num_rg, num_rcab, num_channels, reduction, scale,
-                 num_ag=0):
+    def __init__(self, num_rg, num_rcab, num_channels, reduction, scale):
         super().__init__()
         self.num_rg = num_rg
         self.num_rcab = num_rcab
@@ -104,7 +103,6 @@ class RCAN(nn.Module):
         self.scale = scale
         self._scale1 = int(self.scale)
         self._scale0 = self.scale / float(self._scale1)
-        self.num_ag = num_ag
 
         kernel_size = 3
         act = nn.ReLU(True)
@@ -119,15 +117,7 @@ class RCAN(nn.Module):
         self.conv1 = nn.Conv2d(num_channels, num_channels, kernel_size,
                                padding=padding)
         self.up = Upsample(num_channels, self._scale1, use_padding=True)
-
-        for i in range(num_ag):
-            ag = RG(num_rcab, num_channels, kernel_size, reduction)
-            self.add_module('ag%d' % i, ag)
-        if num_ag > 0:
-            self.conv2 = nn.Conv2d(num_channels, num_channels, kernel_size,
-                                   padding=padding)
-
-        self.conv_end = nn.Conv2d(num_channels, 1, 1)
+        self.conv2 = nn.Conv2d(num_channels, 1, 1)
 
     def calc_out_patch_size(self, input_patch_size):
         x = torch.rand([1, 1] + input_patch_size).float()
@@ -138,7 +128,6 @@ class RCAN(nn.Module):
 
     def forward(self, x):
         x = resize(x, (1 / self._scale0, 1), mode='bicubic')
-
         x = self.conv0(x)
         res = x
         for i in range(self.num_rg):
@@ -146,12 +135,5 @@ class RCAN(nn.Module):
         res = self.conv1(res)
         out = res + x
         out = self.up(out)
-
-        res = out
-        for i in range(self.num_ag):
-            res = getattr(self, 'ag%d' % i)(res)
-        if self.num_ag > 0:
-            out = out + self.conv2(res)
-
-        out = self.conv_end(out)
+        out = self.conv2(out)
         return out

@@ -51,15 +51,13 @@ class Trainer:
     def _create_net(self):
         if self.args.network.lower() == 'rcan':
             self.net = RCAN(self.args.num_groups, self.args.num_blocks,
-                            self.args.num_channels, 16, self.args.scale,
-                            num_ag=self.args.num_groups_after).cuda()
+                            self.args.num_channels, 16, self.args.scale).cuda()
         else:
             raise NotImplementedError
 
     def _create_optim(self):
         if self.args.optim.lower() == 'adam':
-            self.optim = Adam(self.net.parameters(),
-                              lr=self.args.learning_rate)
+            self.optim = Adam(self.net.parameters(), lr=self.args.learning_rate)
         else:
             raise NotImplementedError
 
