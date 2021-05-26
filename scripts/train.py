@@ -23,6 +23,7 @@ parser.add_argument('-S', '--iter-save-step', default=10, type=int)
 parser.add_argument('-O', '--optim', default='adam')
 parser.add_argument('-L', '--loss-func', default='l1')
 parser.add_argument('-N', '--network', default='rcan')
+parser.add_argument('-v', '--valid-step', type=int, default=100)
 args = parser.parse_args()
 
 
