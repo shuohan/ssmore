@@ -38,44 +38,22 @@ class TrainerBuilder:
         self._save_args()
 
     def build(self):
-        predictor = Predictor(self._image, )
-        sampler_builder = SamplerBuilder()
+        predictor = Predictor(self._image)
+        xyz = (self.args.x, self.args.y, self.args.z)
+        sampler_builder = SamplerBuilder(self.args.hr_patch_size, xyz)
         num_batches = self._calc_num_batches()
-
+        builder = ContentsBuilder(self.model, self.optim, self._output_affine,
+                                   self._output_header, num_batches, self.args)
+        contents = builder.build().contents
         trainer = Trainer(self._image, self._slice_profile, self.args.scale,
-                          sampler_builder, predictor, self.net, self.optim,
-                          self.loss_func, batch_size=self.args.batch_size,
-                          num_epochs=num_epochs, num_batches=num_batches,
+                          sampler_builder, predictor, contents, self.loss_func,
+                          batch_size=self.args.batch_size,
+                          num_batches=num_batches,
                           valid_step=self.args.valid_step)
-
-        queue = DataQueue(['loss'])
-        printer = EpochPrinter(print_sep=False)
-        logger = EpochLogger(self.args.log_filename)
-        queue.register(logger)
-        queue.register(printer)
-
-        attrs = ['train_hr', 'train_blur', 'lr', 'train_lr_interp',
-                 'train_output', 'train_hr_crop']
-        train_saver = ImageSaver(self.args.patches_dirname, attrs=attrs,
-                                 step=self.args.image_save_step, zoom=4,
-                                 ordered=True, file_struct='epoch/batch/sample',
-                                 save_type='png_norm')
-
-        attrs = ['valid_hr', 'valid_blur', 'lr', 'valid_lr_interp',
-                 'valid_output', 'valid_hr_crop']
-        valid_saver = ImageSaver(self.args.patches_dirname, attrs=attrs,
-                                 step=self.args.image_save_step, zoom=4,
-                                 ordered=True, file_struct='epoch/batch/sample',
-                                 save_type='png_norm')
-
-        trainer.register(queue)
-        trainer.register(train_saver)
-        trainer.register(valid_saver)
-
         return trainer
 
-    def _create_net(self):
-        if self.args.network.lower() == 'rcan':
+    def _create_model(self):
+        if self.args.model.lower() == 'rcan':
             self.net = RCAN(self.args.num_groups, self.args.num_blocks,
                             self.args.num_channels, 16, self.args.scale).cuda()
         else:
@@ -179,6 +157,7 @@ class SamplerBuilder:
             samplers.append(Sampler(patches))
             samplers.extend([Sampler(p) for p in trans_patches])
         self._sampler = SamplerCollection(*samplers)
+        return self.
 
     def _build_patches(self, image, voxel_size, orient='xy'):
         if orient == 'xy':
@@ -229,74 +208,109 @@ class Predictor:
         return permute3d(result, x=self._ix, y=self._iy, z=self._iz)[0]
 
 
-class SavePred:
-    def __init__(self, affine, header):
-        self.affine = affine
-        self.header = header
-    def save(self, filename, image):
-        out = nib.Nifti1Image(image, self.affine, self.header)
-        out.to_filename(filename)
+class BatchCounter(Counter):
+    def __init__(self, name, nums):
+        self.name = name
+        self._index = 0
+        self._counters = [Counter(name, n) for n in nums]
+
+    @property
+    def num(self):
+        return self._counters[self._index].num
+
+    def has_reached_end(self):
+        return self._counters[self._index].has_reached_end()
+
+    def update(self):
+        self._counters[self._index].update()
+        if self.index == self.num:
+            self._index = min(self._index + 1, len(self._counters))
+
+    @property
+    def index(self):
+        return self._counters[self._index].index
+
+    @property
+    def named_index(self):
+        return self._counters[self._index].named_index
 
 
-class PredSaver(ImageSaver):
-    def __init__(self, dirname, affine, header, step=10, save_init=False):
-        self.affine = affine
-        self.header = header
-        super().__init__(dirname, ['prediction'], step=step,
-                         save_init=save_init, file_struct='epoch/batch/sample',
-                         create_save_image=self._create_save_pred)
-    def _create_save_pred(self, *args, **kwargs):
-        return SavePred(self.affine, self.header)
+class Contents(_Contents):
+    def __init__(self, model, optim, counter):
+        super().__init__(model, optim, counter)
+
+        self.best_model_state = self.model.state_dict()
+        self.best_optim_state = self.optim.state_dict()
+
+        attrs = ['hr', 'blur', 'lr', 'lr_interp', 'output', 'hr_crop']
+        for attr in attrs:
+            self.set_tensor_cuda('train_' + attr, None, name=None)
+            self.set_tensor_cuda('valid_' + attr, None, name=None)
+        self.values['train_loss'] = float('nan')
+        self.values['valid_loss'] = float('nan')
+        self.values['min_valid_loss'] = float('inf')
+
+    def get_model_state_dict(self):
+        return self.best_model_state
+
+    def get_optim_state_dict(self):
+        return self.best_optim_state
+
+    def update_valid_loss(self, valid_loss):
+        self.values['valid_loss'] = valid_loss
+        if valid_loss < self.values['min_valid_loss']:
+            self.values['min_valid_loss'] = valid_loss
+            self.best_model_state = self.model.state_dict()
+            self.best_optim_state = self.optim.state_dict()
 
 
-class Trainer(Subject):
+class ContentsBuilder:
+    def __init__(self, model, optim, affine, header, num_batches, args):
+        self.model = model
+        self.optim = optim
+        self.num_batches = num_batches
+        self.args = args
+        zoom = self.args.image_save_zoom
+        self._save = SaveNifti(zoom=zoom, affine=affine, header=header)
+
+    @property
+    def contents(self):
+        return self._contents
+
+    def build(self):
+        epoch_counter = Counter('epoch', self.args.num_epochs)
+        batch_counter = BatchCounter('batch', self.num_batches)
+        counter = Counters([epoch_counter, batch_counter])
+        self._contents = Contents(self.model, self.optim, counter)
+        self._set_observers()
+        return self
+
+    def _set_observers(self):
+        printer = Printer()
+        logger = Logger(self.args.log_filename)
+        attrs = self._contents.get_tensor_attrs()
+        image_saver = ImageSaver(self.args.patches_dirname, self._save,
+                                 attrs=attrs, step=self.args.image_save_step)
+        self._contents.register(printer, 'counter')
+        self._contents.register(logger, 'counter')
+        self._contents.register(image_saver, 'counter')
+
+
+class Trainer:
     def __init__(self, image, slice_profile, scale, sampler_builder, predictor,
-                 net, optim, loss_func, batch_size=16, num_epochs=100,
-                 num_batches=[100], valid_step=100):
+                 contents, loss_func, batch_size=16, valid_step=100):
         super().__init__()
         self.image = image
         self.slice_profile = slice_profile
         self.scale = scale
-        self.net = net
-        self.optim = optim
+        self.contents = contents
         self.loss_func = loss_func
         self.valid_step = valid_step
-        self.update_steps = update_steps
         self.sampler_builder = sampler_builder
         self.predictor = predictor
+        self.batch_size = batch_size
 
-        self._batch_size = batch_size
-        self._num_epochs = num_epochs
-        self._num_batches = num_batches
-        self._epoch_ind = -1
-        self._batch_ind = -1
         self._pred = self.image
-        self._best_net_state = self.net.state_dict()
-        self._best_optim_state = self.net.state_dict()
-        self._values['min_valid_loss'] = float('inf')
-
-    @property
-    def batch_size(self):
-        return self._batch_size
-
-    @property
-    def num_epochs(self):
-        return self._num_epochs
-
-    @property
-    def num_batches(self):
-        if self._epoch_ind < 0:
-            return max(self._num_batches)
-        else:
-            return self._num_batches[self._epoch_ind]
-
-    @property
-    def epoch_ind(self):
-        return self._epoch_ind + 1
-
-    @property
-    def batch_ind(self):
-        return self._batch_ind + 1
 
     @property
     def prediction(self):
@@ -311,22 +325,19 @@ class Trainer(Subject):
         return self
 
     def train(self):
-        self.notify_observers_on_train_start()
-        for self._epoch_ind in range(self.num_epochs):
+        self.contents.start_observers()
+        counter = self.contents.counter
+        while not counter[0].has_reached_end():
             self._build_sampler()
-            self.notify_observers_on_epoch_start()
-            for self._batch_ind in range(self.num_batches):
+            while not counter[1].has_reached_end():
                 self._has_predicted = False
-                self.notify_observers_on_batch_start()
                 self._train_on_batch()
                 if self._need_to_validate():
                     self._valid_on_batch()
-                self.notify_observers_on_batch_end()
-            self._revert_to_best_model()
+                self.contents.notify_observers()
             self._pred = self._predict()
             self._has_predicted = True
-            self.notify_observers_on_epoch_end()
-        self.notify_observers_on_train_end()
+        self.contents.close()
 
     def _build_sampler(self):
         num_indices = self.batch_size * self.num_batches
@@ -360,9 +371,9 @@ class Trainer(Subject):
         indices = self._train_indices[start_ind : stop_ind]
         batch = self._sampler.get_patches(indices)
 
-        self.net.train()
-        self.optim.zero_grad()
-        self._apply_net(batch, prefix='train_')
+        self.contents.model.train()
+        self.contents.optim.zero_grad()
+        self._apply_model(batch, prefix='train_')
         output = self._tensors_cuda['train_output'].data
         hr_crop = self._tensors_cuda['train_hr_crop'].data
         loss = self.loss_func(output, hr_crop)
@@ -370,20 +381,20 @@ class Trainer(Subject):
         self.optim.step()
         self._values['train_loss'] = loss
 
-    def _apply_net(self, batch, prefix=''):
+    def _apply_model(self, batch, prefix=''):
         blur = F.conv2d(batch.data, self.slice_profile)
         lr = resize(blur, (self.scale, 1), mode='bicubic')
-        output = self.net(lr)
+        output = self.contents.model(lr)
         hr_crop = self._crop_hr(batch.data, output.shape[2:])
         lr_interp = resize(lr, (1 / self.scale, 1), mode='bicubic',
                            target_shape=output.shape[2:])
 
-        self._set_tensor_cuda(prefix + 'hr', batch.data, name=batch.name)
-        self._set_tensor_cuda(prefix + 'blur', blur, name=batch.name)
-        self._set_tensor_cuda(prefix + 'lr', lr, name=batch.name)
-        self._set_tensor_cuda(prefix + 'lr_interp', lr_interp, name=batch.name)
-        self._set_tensor_cuda(prefix + 'output', output, name=batch.name)
-        self._set_tensor_cuda(prefix + 'hr_crop', hr_crop, name=batch.name)
+        self.contents.set_tensor_cuda(prefix + 'hr', batch.data, batch.name)
+        self.contents.set_tensor_cuda(prefix + 'blur', blur, batch.name)
+        self.contents.set_tensor_cuda(prefix + 'lr', lr, batch.name)
+        self.contents.set_tensor_cuda(prefix + 'lr_interp', lr_interp, batch.name)
+        self.contents.set_tensor_cuda(prefix + 'output', output, batch.name)
+        self.contents.set_tensor_cuda(prefix + 'hr_crop', hr_crop, batch.name)
 
     def _crop_hr(self, hr, target_shape):
         left_crop = (self.slice_profile.shape[2] - 1) // 2
@@ -397,18 +408,10 @@ class Trainer(Subject):
         return rule1 or rule2
 
     def _valid_on_batch(self):
-        self.net.eval()
+        self.contents.model.eval()
         with torch.no_grad():
             self._apply_net(self._valid_batch, prefix='valid_')
-            output = self._tensors_cuda['valid_output'].data
-            hr_crop = self._tensors_cuda['valid_hr_crop'].data
+            output = self.contents.get_tensor_cuda('valid_output').data
+            hr_crop = self.contents.get_tensor_cuda('valid_hr_crop').data
             loss = self.loss_func(output, hr_crop)
-            self._values['valid_loss'] = loss
-            if loss < self._values['min_valid_loss']:
-                self._values['min_valid_loss'] = loss
-                self._best_net_state = self.net.state_dict()
-                self._best_optim_state = self.net.state_dict()
-
-    def _revert_to_best_model(self):
-        self.net.load_state_dict(self._best_net_state)
-        self.optim.load_state_dict(self._optim_net_state)
+            self.contents.update_valid_loss(loss)
