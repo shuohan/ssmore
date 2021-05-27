@@ -2,7 +2,7 @@ from copy import deepcopy
 
 from ptxl.abstract import Contents as _Contents
 from ptxl.utils import Counter_, Counter, Counters
-from ptxl.log import Logger, Printer
+from ptxl.log import Logger, Printer, MultiTqdmPrinter
 from ptxl.save import ImageSaver, SaveNifti, SavePngNorm
 
 
@@ -104,8 +104,8 @@ class ContentsBuilder:
         self.optim = optim
         self.nums_batches = nums_batches
         self.args = args
+        self._contents = None
         self._save_nii = SaveNifti(affine=affine, header=header)
-        self._save_png = SavePngNorm(zoom=args.patch_save_zoom)
 
     @property
     def contents(self):
@@ -118,6 +118,24 @@ class ContentsBuilder:
         self._contents = Contents(self.model, self.optim, counter)
         self._set_observers()
         return self
+
+    def _set_observers(self):
+        attrs = self._contents.get_value_attrs()
+        printer = MultiTqdmPrinter(attrs=attrs)
+        logger = Logger(self.args.log_filename, attrs=attrs)
+        self._contents.register(printer)
+        self._contents.register(logger)
+
+        step = (float('inf'), ) * 2
+        pred_saver = PredSaver(self.args.result_dirname, self._save_nii,
+                               attrs=['pred'], step=step, use_new_folder=False)
+        self._contents.register(pred_saver)
+
+
+class ContentsBuilderDebug(ContentsBuilder):
+    def __init__(self, model, optim, affine, header, nums_batches, args):
+        super().__init__(model, optim, affine, header, nums_batches, args)
+        self._save_png = SavePngNorm(zoom=args.patch_save_zoom)
 
     def _set_observers(self):
         attrs = self._contents.get_value_attrs()

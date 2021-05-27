@@ -12,7 +12,7 @@ from sssrlib.utils import calc_foreground_mask
 from sssrlib.sample import SampleWeights
 
 from .models.rcan import RCAN
-from .contents import ContentsBuilder
+from .contents import ContentsBuilder, ContentsBuilderDebug
 from .predict import Predictor
 from .sample import SamplerBuilder
 
@@ -52,9 +52,13 @@ class TrainerBuilder:
 
     def _build_contents(self):
         nums_batches = self._calc_nums_batches()
-        builder = ContentsBuilder(self.model, self.optim, self._output_affine,
-                                  self._output_header, nums_batches, self.args)
-        self.contents = builder.build().contents
+        if self.args.debug:
+            b = ContentsBuilderDebug(self.model, self.optim, self._out_affine,
+                                     self._out_header, nums_batches, self.args)
+        else:
+            b = ContentsBuilder(self.model, self.optim, self._out_affine,
+                                self._out_header, nums_batches, self.args)
+        self.contents = b.build().contents
 
     def _create_model(self):
         if self.args.model.lower() == 'rcan':
@@ -84,9 +88,9 @@ class TrainerBuilder:
         self.args.log_filename = str(Path(self.args.output_dir, 'log.csv'))
         self.args.result_dirname = str(Path(self.args.output_dir, 'results'))
         self.args.config = str(Path(self.args.output_dir, 'config.json'))
-        Path(self.args.train_patch_dirname).mkdir()
-        Path(self.args.valid_patch_dirname).mkdir()
-        Path(self.args.result_dirname).mkdir()
+        # Path(self.args.train_patch_dirname).mkdir()
+        # Path(self.args.valid_patch_dirname).mkdir()
+        # Path(self.args.result_dirname).mkdir()
 
     def _parse_image(self):
         obj = nib.load(self.args.image)
@@ -95,7 +99,7 @@ class TrainerBuilder:
         self._get_axis_order()
         self.args.scale = float(self.args.voxel_size[self.args.z])
         self._calc_output_affine(obj.affine)
-        self._output_header = obj.header
+        self._out_header = obj.header
 
     def _get_axis_order(self):
         z = np.argmax(self.args.voxel_size)
@@ -110,7 +114,7 @@ class TrainerBuilder:
         scale_mat = np.array([1, 1, 1 / scale, 1])
         mat_order = [self.args.x, self.args.y, self.args.z, 3]
         scale_mat = np.diag(scale_mat[mat_order])
-        self._output_affine = orig_affine @ scale_mat
+        self._out_affine = orig_affine @ scale_mat
 
     def _load_slice_profile(self):
         if self.args.slice_profile == 'gaussian':

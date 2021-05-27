@@ -27,6 +27,7 @@ parser.add_argument('-V', '--num-valid-samples', type=int, default=128)
 parser.add_argument('-P', '--pred-batch-step', type=int, default=float('inf'))
 parser.add_argument('-E', '--pred-epoch-step', type=int, default=1)
 parser.add_argument('-Z', '--pred-batch-size', type=int, default=64)
+parser.add_argument('-D', '--debug', action='store_true')
 args = parser.parse_args()
 
 
