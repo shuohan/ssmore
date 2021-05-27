@@ -126,7 +126,7 @@ class ContentsBuilder:
         self._contents.register(printer)
         self._contents.register(logger)
 
-        step = (float('inf'), ) * 2
+        step = (self.args.pred_epoch_step, float('inf'))
         pred_saver = PredSaver(self.args.result_dirname, self._save_nii,
                                attrs=['pred'], step=step, use_new_folder=False)
         self._contents.register(pred_saver)

@@ -12,9 +12,9 @@ type=scale-4p9_fwhm-6p125
 image=/data/smore_simu_same_fov/simu_data/${type}/sub-OAS30167_ses-d0111_T1w_initnorm_${type}.nii.gz
 kernel=$(echo $image | sed "s/\.nii\.gz$/.npy/")
 
-num_epochs=10
-num_batches=20000
-following_num_batches=1000
+num_epochs=5
+num_batches=100
+following_num_batches=10
 # num_epochs=1
 # num_batches=10
 # following_num_batches=1
