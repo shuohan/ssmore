@@ -181,6 +181,8 @@ class Trainer:
             counter['batch'].update()
             self.contents.revert_to_best()
             self.voxel_size = (min(self.voxel_size), ) * 3
+            self.contents.set_value('valid_loss', float('nan'))
+            self.contents.set_value('min_valid_loss', float('inf'))
         self.contents.close_observers()
 
     def _build_sampler(self):
@@ -216,8 +218,8 @@ class Trainer:
         return self._sampler.sample_indices(num_indices, self._valid_indices)
 
     def _predict(self):
-        pred = self.predictor.predict(self.contents.best_model)
-        self.contents.set_tensor_cpu('pred', pred[None, None, ...], '')
+        self._pred = self.predictor.predict(self.contents.best_model)
+        self.contents.set_tensor_cpu('pred', self._pred[None, None, ...], '')
 
     def _train_on_batch(self):
         start_ind = (self.contents.counter['batch'].index - 1) * self.batch_size
