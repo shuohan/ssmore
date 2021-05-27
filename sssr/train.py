@@ -85,11 +85,13 @@ class TrainerBuilder:
 
     def _specify_outputs(self):
         Path(self.args.output_dir).mkdir(parents=True)
-        self.args.patches_dirname = str(Path(self.args.output_dir, 'patches'))
+        self.args.train_patch_dirname = str(Path(self.args.output_dir, 'train_patches'))
+        self.args.valid_patch_dirname = str(Path(self.args.output_dir, 'valid_patches'))
         self.args.log_filename = str(Path(self.args.output_dir, 'log.csv'))
         self.args.result_dirname = str(Path(self.args.output_dir, 'results'))
         self.args.config = str(Path(self.args.output_dir, 'config.json'))
-        Path(self.args.patches_dirname).mkdir()
+        Path(self.args.train_patch_dirname).mkdir()
+        Path(self.args.valid_patch_dirname).mkdir()
         Path(self.args.result_dirname).mkdir()
 
     def _parse_image(self):
@@ -281,6 +283,10 @@ class Contents(_Contents):
             self.best_model_state = self.model.state_dict()
             self.best_optim_state = self.optim.state_dict()
 
+    def revert_to_best(self):
+        self.model.load_state_dict(self.best_model_state)
+        self.optim.load_state_dict(self.best_optim_state)
+
 
 class PatchSaver(ImageSaver):
     def _needs_to_update(self):
@@ -330,13 +336,17 @@ class ContentsBuilder:
 
         attrs = self._contents.get_tensor_attrs()
         attrs = ['hr', 'blur', 'lr', 'lr_interp', 'output', 'hr_crop']
-        attrs = ['train_' + a for a in attrs] + ['valid_' + a for a in attrs]
-        patch_saver = PatchSaver(self.args.patches_dirname, self._save_png,
-                                 attrs=attrs, step=self.args.patch_save_step)
+        train_saver = PatchSaver(self.args.train_patch_dirname, self._save_png,
+                                 attrs=['train_' + a for a in attrs],
+                                 step=self.args.patch_save_step)
+        valid_saver = PatchSaver(self.args.valid_patch_dirname, self._save_png,
+                                 attrs=['valid_' + a for a in attrs],
+                                 step=self.args.patch_save_step)
         step = (self.args.pred_epoch_step, self.args.pred_batch_step)
         pred_saver = PredSaver(self.args.result_dirname, self._save_nii,
                                attrs=['pred'], step=step)
-        self._contents.register(patch_saver)
+        self._contents.register(train_saver)
+        self._contents.register(valid_saver)
         self._contents.register(pred_saver)
 
 
@@ -373,6 +383,7 @@ class Trainer:
                     self._predict()
                 self.contents.notify_observers()
                 counter['batch'].update()
+            self.contents.revert_to_best()
             self.voxel_size = (min(self.voxel_size), ) * 3
         self.contents.close_observers()
 
