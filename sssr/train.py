@@ -218,7 +218,9 @@ class Predictor:
         result = (result1 + result0) / 2
         result = result.detach().cpu().numpy().squeeze()
 
-        return permute3d(result, x=self._ix, y=self._iy, z=self._iz)[0]
+        result = permute3d(result, x=self._ix, y=self._iy, z=self._iz)[0]
+        result = torch.tensor(result)
+        return result
 
 
 class BatchCounter(Counter_):
@@ -257,7 +259,7 @@ class Contents(_Contents):
     def __init__(self, model, optim, counter):
         super().__init__(model, optim, counter)
 
-        self.best_model_state = self.model.state_dict()
+        self.best_model = deepcopy(self.model)
         self.best_optim_state = self.optim.state_dict()
 
         attrs = ['hr', 'blur', 'lr', 'lr_interp', 'output', 'hr_crop']
@@ -270,7 +272,7 @@ class Contents(_Contents):
         self.set_value('min_valid_loss', float('inf'))
 
     def get_model_state_dict(self):
-        return self.best_model_state
+        return self.best_model.state_dict()
 
     def get_optim_state_dict(self):
         return self.best_optim_state
@@ -280,11 +282,11 @@ class Contents(_Contents):
         self.set_value('valid_loss', valid_loss)
         if valid_loss < self.get_value('min_valid_loss'):
             self.set_value('min_valid_loss', valid_loss)
-            self.best_model_state = self.model.state_dict()
+            self.best_model.load_state_dict(self.model.state_dict())
             self.best_optim_state = self.optim.state_dict()
 
     def revert_to_best(self):
-        self.model.load_state_dict(self.best_model_state)
+        self.model.load_state_dict(self.best_model.state_dict())
         self.optim.load_state_dict(self.best_optim_state)
 
 
@@ -420,8 +422,8 @@ class Trainer:
         return self._sampler.sample_indices(num_indices, self._valid_indices)
 
     def _predict(self):
-        pred = self.predictor.predict(self.contents.model)
-        self.contents.set_tensor_cpu('pred', pred, '')
+        pred = self.predictor.predict(self.contents.best_model)
+        self.contents.set_tensor_cpu('pred', pred[None, None, ...], '')
 
     def _train_on_batch(self):
         start_ind = (self.contents.counter['batch'].index - 1) * self.batch_size

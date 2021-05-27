@@ -26,7 +26,8 @@ num_channels=64
 num_blocks=8
 num_groups=2
 patch_size=40
-epoch_save_step=1
+pred_epoch_step=1
+pred_batch_step=10
 
 name=$(basename $image | sed "s/\.nii\.gz$//")
 # output_dir=results_rcan_${name}_e${num_epochs}_b${batch_size}_nc${num_channels}_nb${num_blocks}_ng${num_groups}_ni${num_iters}_nf${following_num_epochs}_bicubic_test_lr${learning_rate}
@@ -35,4 +36,4 @@ rm -rf $output_dir
 ../scripts/train.py -i $image -o $output_dir -e $num_epochs \
     -S $save_step -B $batch_size -d ${num_blocks} -w ${num_channels} \
     -g $num_groups -l $learning_rate -b $num_batches \
-    -f $following_num_batches -E $epoch_save_step -s $kernel
+    -f $following_num_batches -E $pred_epoch_step -s $kernel -P $pred_batch_step
