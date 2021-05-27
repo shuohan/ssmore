@@ -226,7 +226,7 @@ class Predictor:
 class BatchCounter(Counter_):
     def __init__(self, name, nums):
         self._name = name
-        self._index = 0
+        self._counter_index = 0
         self._counters = [Counter(name, n) for n in nums]
 
     @property
@@ -235,24 +235,25 @@ class BatchCounter(Counter_):
 
     @property
     def num(self):
-        return self._counters[self._index].num
+        return self._counters[self._counter_index].num
 
     @property
     def index(self):
-        return self._counters[self._index].index
+        return self._counters[self._counter_index].index
 
     @property
     def named_index(self):
-        return self._counters[self._index].named_index
+        return self._counters[self._counter_index].named_index
 
     def __iter__(self):
-        return self._counters[self._index]
+        return self._counters[self._counter_index]
 
     def update(self):
-        self._index = min(self._index + 1, len(self._counters) - 1)
+        self._counter_index = self._counter_index + 1
+        self._counter_index = min(self._counter_index, len(self._counters) - 1)
 
     def has_reached_end(self):
-        return self._counters[self._index].has_reached_end()
+        return self._counters[self._counter_index].has_reached_end()
 
 
 class Contents(_Contents):
@@ -306,6 +307,12 @@ class PredSaver(ImageSaver):
         brule2 = self.contents.counter['batch'].has_reached_end()
         batch_rule = brule1 or brule2
         return batch_rule and epoch_rule
+    def _get_filename(self, sind, aind, attr, num_samples):
+        filename = super()._get_filename(sind, aind, attr, num_samples)
+        min_valid_loss = self.contents.get_value('min_valid_loss')
+        min_valid_loss = ('min-val-%.2e' % min_valid_loss).replace('.', 'p')
+        filename = '_'.join([filename, min_valid_loss])
+        return filename
 
 
 class ContentsBuilder:
@@ -346,7 +353,7 @@ class ContentsBuilder:
                                  step=self.args.patch_save_step)
         step = (self.args.pred_epoch_step, self.args.pred_batch_step)
         pred_saver = PredSaver(self.args.result_dirname, self._save_nii,
-                               attrs=['pred'], step=step)
+                               attrs=['pred'], step=step, use_new_folder=False)
         self._contents.register(train_saver)
         self._contents.register(valid_saver)
         self._contents.register(pred_saver)
@@ -384,7 +391,7 @@ class Trainer:
                 if self._needs_to_predict():
                     self._predict()
                 self.contents.notify_observers()
-                counter['batch'].update()
+            counter['batch'].update()
             self.contents.revert_to_best()
             self.voxel_size = (min(self.voxel_size), ) * 3
         self.contents.close_observers()
