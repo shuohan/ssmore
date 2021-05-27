@@ -6,7 +6,10 @@ import torch.nn.functional as F
 from torch.optim import Adam
 from torch.nn import L1Loss
 from pathlib import Path
+
 from resize.pt import resize
+from sssrlib.utils import calc_foreground_mask
+from sssrlib.sample import SampleWeights
 
 from .models.rcan import RCAN
 from .contents import ContentsBuilder
@@ -35,7 +38,7 @@ class TrainerBuilder:
         self._save_args()
         self._build_contents()
         xyz = (self.args.x, self.args.y, self.args.z)
-        predictor = Predictor(self._image, xyz)
+        predictor = Predictor(self._image, xyz, self.args.pred_batch_size)
         sampler_builder = SamplerBuilder(self.args.hr_patch_size, xyz)
         self._trainer = Trainer(self._image, self._slice_profile,
                                 self.args.scale, self.args.voxel_size,

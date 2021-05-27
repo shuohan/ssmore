@@ -93,7 +93,7 @@ class PredSaver(ImageSaver):
     def _get_filename(self, sind, aind, attr, num_samples):
         filename = super()._get_filename(sind, aind, attr, num_samples)
         min_valid_loss = self.contents.get_value('min_valid_loss')
-        min_valid_loss = ('min-val-%.2e' % min_valid_loss).replace('.', 'p')
+        min_valid_loss = ('min-val-%.4e' % min_valid_loss).replace('.', 'p')
         filename = '_'.join([filename, min_valid_loss])
         return filename
 
@@ -140,5 +140,3 @@ class ContentsBuilder:
         self._contents.register(train_saver)
         self._contents.register(valid_saver)
         self._contents.register(pred_saver)
-
-

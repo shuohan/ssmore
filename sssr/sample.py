@@ -1,7 +1,6 @@
 from sssrlib.patches import Patches, TransformedPatches
 from sssrlib.transform import Flip
-from sssrlib.sample import Sampler, SamplerCollection, SampleWeights
-from sssrlib.utils import calc_foreground_mask
+from sssrlib.sample import Sampler, SamplerCollection
 
 
 class SamplerBuilder:
