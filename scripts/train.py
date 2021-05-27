@@ -12,23 +12,25 @@ parser.add_argument('-s', '--slice-profile', default='gaussian')
 parser.add_argument('-d', '--num-blocks', default=8, type=int)
 parser.add_argument('-w', '--num-channels', default=256, type=int)
 parser.add_argument('-l', '--learning-rate', default=0.0001, type=float)
-parser.add_argument('-b', '--batch-size', default=16, type=int)
-parser.add_argument('-e', '--num-epochs', default=10000, type=int)
-parser.add_argument('-n', '--num-iters', default=3, type=int)
-parser.add_argument('-I', '--image-save-step', default=50, type=int)
-parser.add_argument('-P', '--use-padding', action='store_true')
+parser.add_argument('-e', '--num-epochs', default=3, type=int)
+parser.add_argument('-b', '--num-batches', default=10000, type=int)
+parser.add_argument('-B', '--batch-size', default=16, type=int)
+parser.add_argument('-S', '--patch-save-step', default=50, type=int)
+parser.add_argument('-z', '--patch-save-zoom', default=4, type=int)
 parser.add_argument('-g', '--num-groups', default=4, type=int)
-parser.add_argument('-f', '--following-num-epochs', default=100, type=int)
-parser.add_argument('-S', '--iter-save-step', default=10, type=int)
+parser.add_argument('-f', '--following-num-batches', default=100, type=int)
 parser.add_argument('-O', '--optim', default='adam')
 parser.add_argument('-L', '--loss-func', default='l1')
-parser.add_argument('-N', '--network', default='rcan')
+parser.add_argument('-m', '--model', default='rcan')
 parser.add_argument('-v', '--valid-step', type=int, default=100)
+parser.add_argument('-V', '--num-valid-samples', type=int, default=128)
+parser.add_argument('-P', '--pred-batch-step', type=int, default=float('inf'))
+parser.add_argument('-E', '--pred-epoch-step', type=int, default=1)
 args = parser.parse_args()
 
 
-from sssr.train import build_trainer
+from sssr.train import TrainerBuilder
 
 
-trainer = build_trainer(args)
+trainer = TrainerBuilder(args).build().trainer
 trainer.train()

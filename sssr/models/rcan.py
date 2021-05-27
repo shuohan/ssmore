@@ -123,7 +123,7 @@ class RCAN(nn.Module):
         x = torch.rand([1, 1] + input_patch_size).float()
         x = x.to(next(self.parameters()).device)
         out = self(x)
-        patch_size = tuple(out.shape[2:])
+        patch_size = list(out.shape[2:])
         return patch_size
 
     def forward(self, x):
