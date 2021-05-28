@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from torch.optim import Adam
 from torch.nn import L1Loss
 from pathlib import Path
+from scipy.signal.windows import gaussian
 
 from resize.pt import resize
 from sssrlib.utils import calc_foreground_mask
@@ -118,15 +119,15 @@ class TrainerBuilder:
 
     def _load_slice_profile(self):
         if self.args.slice_profile == 'gaussian':
-            slice_profile = calc_gaussian_slice_profile()
+            slice_profile = self._calc_gaussian_slice_profile()
         else:
             slice_profile = np.load(self.args.slice_profile)
         slice_profile = slice_profile.squeeze()[None, None, :, None]
         self._slice_profile = torch.tensor(slice_profile).float().cuda()
 
-    def _calc_gaussian_slice_profile(self, scale):
+    def _calc_gaussian_slice_profile(self):
         std = self.args.scale / (2 * np.sqrt(2 * np.log(2)))
-        length = int(2 * round(scale) + 1)
+        length = int(2 * round(self.args.scale) + 1)
         slice_profile = gaussian(length, std)
         slice_profile = slice_profile / slice_profile.sum()
         return slice_profile
