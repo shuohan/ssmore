@@ -243,10 +243,10 @@ class Trainer:
 
     def _apply_model(self, batch, prefix=''):
         blur = F.conv2d(batch.data, self.slice_profile)
-        lr = resize(blur, (self.scale, 1), mode='bicubic')
+        lr = resize(blur, (self.scale, 1), order=3)
         output = self.contents.model(lr)
         hr_crop = self._crop_hr(batch.data, output.shape[2:])
-        lr_interp = resize(lr, (1 / self.scale, 1), mode='bicubic',
+        lr_interp = resize(lr, (1 / self.scale, 1), order=3,
                            target_shape=output.shape[2:])
 
         name = batch.name
@@ -261,7 +261,7 @@ class Trainer:
         left_crop = (self.slice_profile.shape[2] - 1) // 2
         right_crop = self.slice_profile.shape[2] - 1 - left_crop
         result = hr[:, :, left_crop : -right_crop, ...]
-        return resize(result, (1, 1), target_shape=target_shape)
+        return resize(result, (1, 1), target_shape=target_shape, order=3)
 
     def _needs_to_validate(self):
         counter = self.contents.counter['batch']

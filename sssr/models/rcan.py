@@ -127,7 +127,7 @@ class RCAN(nn.Module):
         return patch_size
 
     def forward(self, x):
-        x = resize(x, (1 / self._scale0, 1), mode='bicubic')
+        x = resize(x, (1 / self._scale0, 1), order=3)
         x = self.conv0(x)
         res = x
         for i in range(self.num_rg):
