@@ -8,7 +8,7 @@ from torch.nn import L1Loss
 from pathlib import Path
 from scipy.signal.windows import gaussian
 
-from resize.pt import resize
+from resize.pytorch import resize
 from sssrlib.utils import calc_foreground_mask
 from sssrlib.sample import SampleWeights
 

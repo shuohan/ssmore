@@ -3,7 +3,7 @@
 """
 import torch
 from torch import nn
-from resize.pt import resize
+from resize.pytorch import resize
 
 from .edsr import Upsample
 
