@@ -192,19 +192,17 @@ class Trainer:
 
     def _build_sampler(self):
         self.sampler_builder.build(self._pred, self.voxel_size)
-        self._sampler = self.sampler_builder.sampler
+        self._train_sampler = self.sampler_builder.train_sampler
+        self._valid_sampler = self.sampler_builder.valid_sampler
         self._valid_indices = self._select_valid_indices()
         self._train_indices = self._select_train_indices()
-        self._valid_batch = self._sampler.get_patches(self._valid_indices)
-        # a = set([tuple(v) for v in self._valid_indices.tolist()])
-        # b = set(self._train_indices)
-        # diff = set(a).intersection(b)
-        # assert len(diff) == 0
+        self._valid_batch = self._valid_sampler.get_patches(self._valid_indices)
 
     def _select_valid_indices(self):
         valid_indices = list()
-        num_valid_samples = self.num_valid_samples // self._sampler.num_samplers
-        for i, patches in enumerate(self._sampler.patches.sub_patches):
+        num_valid_samples = self.num_valid_samples \
+            // self._valid_sampler.num_samplers
+        for i, patches in enumerate(self._valid_sampler.patches.sub_patches):
             mask = calc_foreground_mask(patches.image)
             flat_mask = SampleWeights(patches, (mask, )).weights_flat
             mapping = torch.where(flat_mask > 0)[0].cpu().numpy()
@@ -220,7 +218,7 @@ class Trainer:
     def _select_train_indices(self):
         num_batches = self.contents.counter['batch'].num
         num_indices = self.batch_size * num_batches
-        return self._sampler.sample_indices(num_indices, self._valid_indices)
+        return self._train_sampler.sample_indices(num_indices)
 
     def _predict(self):
         self._pred = self.predictor.predict(self.contents.best_model)
@@ -230,7 +228,7 @@ class Trainer:
         start_ind = (self.contents.counter['batch'].index - 1) * self.batch_size
         stop_ind = start_ind + self.batch_size
         indices = self._train_indices[start_ind : stop_ind]
-        batch = self._sampler.get_patches(indices)
+        batch = self._train_sampler.get_patches(indices)
 
         self.contents.model.train()
         self.contents.optim.zero_grad()
