@@ -21,12 +21,20 @@ class BatchCounter(Counter_):
         return self._counters[self._counter_index].num
 
     @property
-    def index(self):
-        return self._counters[self._counter_index].index
+    def index0(self):
+        return self._counters[self._counter_index].index0
 
     @property
-    def named_index(self):
-        return self._counters[self._counter_index].named_index
+    def named_index0(self):
+        return self._counters[self._counter_index].named_index0
+
+    @property
+    def index1(self):
+        return self._counters[self._counter_index].index1
+
+    @property
+    def named_index1(self):
+        return self._counters[self._counter_index].named_index1
 
     def __iter__(self):
         return self._counters[self._counter_index]
@@ -76,17 +84,17 @@ class Contents(_Contents):
 
 class PatchSaver(ImageSaver):
     def _needs_to_update(self):
-        rule1 = self.contents.counter['batch'].index % self.step == 0
+        rule1 = self.contents.counter['batch'].index1 % self.step == 0
         rule2 = self.contents.counter['batch'].has_reached_end()
         return rule1 or rule2
 
 
 class PredSaver(ImageSaver):
     def _needs_to_update(self):
-        erule1 = self.contents.counter['epoch'].index % self.step[0] == 0
+        erule1 = self.contents.counter['epoch'].index1 % self.step[0] == 0
         erule2 = self.contents.counter['epoch'].has_reached_end()
         epoch_rule = erule1 or erule2
-        brule1 = self.contents.counter['batch'].index % self.step[1] == 0
+        brule1 = self.contents.counter['batch'].index1 % self.step[1] == 0
         brule2 = self.contents.counter['batch'].has_reached_end()
         batch_rule = brule1 or brule2
         return batch_rule and epoch_rule

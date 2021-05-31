@@ -214,7 +214,7 @@ class Trainer:
         self.contents.set_tensor_cpu('pred', self._pred[None, None, ...], '')
 
     def _train_on_batch(self):
-        batch_ind = self.contents.counter['batch'].index - 1
+        batch_ind = self.contents.counter['batch'].index0
         start_ind = batch_ind * self.args.batch_size
         stop_ind = start_ind + self.args.batch_size
         indices = self._train_indices[start_ind : stop_ind]
@@ -254,18 +254,18 @@ class Trainer:
 
     def _needs_to_validate(self):
         counter = self.contents.counter['batch']
-        rule1 = counter.index % self.args.valid_step == 0
+        rule1 = counter.index1 % self.args.valid_step == 0
         rule2 = counter.has_reached_end()
         return rule1 or rule2
 
     def _needs_to_predict(self):
         counter = self.contents.counter['batch']
-        rule1 = counter.index % self._get_current_pred_batch_step() == 0
+        rule1 = counter.index1 % self._get_current_pred_batch_step() == 0
         rule2 = counter.has_reached_end()
         return rule1 or rule2
 
     def _get_current_pred_batch_step(self):
-        epoch_ind = self.contents.counter['epoch'].index - 1
+        epoch_ind = self.contents.counter['epoch'].index0
         return self._pred_batch_steps[epoch_ind]
 
     def _valid_on_batch(self):
