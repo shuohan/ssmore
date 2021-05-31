@@ -12,8 +12,8 @@ type=scale-4p9_fwhm-6p125
 image=/data/smore_simu_same_fov/simu_data/${type}/sub-OAS30167_ses-d0111_T1w_initnorm_${type}.nii.gz
 kernel=$(echo $image | sed "s/\.nii\.gz$/.npy/")
 
-num_epochs=5
-num_batches=300
+num_epochs=1
+num_batches=10
 following_num_batches=30
 # num_epochs=1
 # num_batches=10
@@ -38,4 +38,4 @@ rm -rf $output_dir
     -g $num_groups -l $learning_rate -b $num_batches \
     -f $following_num_batches -E $pred_epoch_step -s $kernel \
     -P $pred_batch_step -p ${patch_size} ${patch_size} \
-    -F ${pred_following_batch_step}
+    -F ${pred_following_batch_step} -D

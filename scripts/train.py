@@ -30,11 +30,19 @@ parser.add_argument('-F', '--pred-following-batch-step', type=int,
 parser.add_argument('-E', '--pred-epoch-step', type=int, default=1)
 parser.add_argument('-Z', '--pred-batch-size', type=int, default=64)
 parser.add_argument('-D', '--debug', action='store_true')
+parser.add_argument('-r', '--set-random-seed', action='store_true')
 args = parser.parse_args()
 
 
 from sssr.train import TrainerBuilder
 
+if args.set_random_seed:
+    import torch
+    import random
+    import numpy as np
+    random.seed(0)
+    torch.manual_seed(0)
+    np.random.seed(0)
 
 trainer = TrainerBuilder(args).build().trainer
 trainer.train()
