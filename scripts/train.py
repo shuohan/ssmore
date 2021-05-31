@@ -31,6 +31,8 @@ parser.add_argument('-E', '--pred-epoch-step', type=int, default=1)
 parser.add_argument('-Z', '--pred-batch-size', type=int, default=64)
 parser.add_argument('-D', '--debug', action='store_true')
 parser.add_argument('-r', '--set-random-seed', action='store_true')
+parser.add_argument('-c', '--checkpoint')
+parser.add_argument('-C', '--checkpoint-save-step', type=int, default=float('inf'))
 args = parser.parse_args()
 
 

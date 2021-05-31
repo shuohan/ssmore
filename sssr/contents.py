@@ -4,6 +4,7 @@ from ptxl.abstract import Contents as _Contents
 from ptxl.utils import Counter_, Counter, Counters
 from ptxl.log import Logger, Printer, MultiTqdmPrinter
 from ptxl.save import ImageSaver, SaveNifti, SavePngNorm
+from ptxl.save import CheckpointSaver as CheckpointSaver_
 
 
 class BatchCounter(Counter_):
@@ -59,6 +60,7 @@ class Contents(_Contents):
             self.set_tensor_cuda('train_' + attr, None, name=None)
             self.set_tensor_cuda('valid_' + attr, None, name=None)
         self.set_tensor_cpu('pred', None, name=None)
+        self.set_value('voxel_size', (float('nan'), ) * 3)
         self.set_value('train_loss', float('nan'))
         self.set_value('valid_loss', float('nan'))
         self.set_value('min_valid_loss', float('inf'))
@@ -68,6 +70,14 @@ class Contents(_Contents):
 
     def get_optim_state_dict(self):
         return self.best_optim_state
+
+    def load_state_dicts(self, checkpoint):
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.optim.load_state_dict(checkpoint['optim_state_dict'])
+        self.best_model.load_state_dict(checkpoint['model_state_dict'])
+        self.best_optim_state = checkpoint['optim_state_dict']
+        self.set_value('voxel_size', checkpoint['voxel_size'])
+        self.set_tensor_cpu('pred', checkpoint['pred'])
 
     def update_valid_loss(self, valid_loss):
         valid_loss = valid_loss.item()
@@ -106,6 +116,15 @@ class PredSaver(ImageSaver):
         return filename
 
 
+class CheckpointSaver(CheckpointSaver_):
+    def _get_contents_to_save(self):
+        return {self._get_counter_name(): self._get_counter_index(),
+                'model_state_dict': self.contents.get_model_state_dict(),
+                'optim_state_dict': self.contents.get_optim_state_dict(),
+                'pred': self.contents.get_tensor('pred'),
+                'voxel_size': self.contents.get_value('voxel_size')}
+
+
 class ContentsBuilder:
     def __init__(self, model, optim, affine, header, args):
         self.model = model
@@ -139,17 +158,26 @@ class ContentsBuilder:
         self._printer = self._create_printer()
         self._logger = self._create_logger()
         self._pred_saver = self._create_pred_saver()
+        self._cp_saver = self._create_checkpoint_saver()
         self._contents.register(self._printer)
         self._contents.register(self._logger)
         self._contents.register(self._pred_saver)
+        self._contents.register(self._cp_saver)
 
     def _create_printer(self):
-        attrs = self._contents.get_value_attrs()
+        attrs = self._get_value_attrs()
         return MultiTqdmPrinter(attrs=attrs)
 
     def _create_logger(self):
-        attrs = self._contents.get_value_attrs()
+        attrs = self._get_value_attrs()
         return Logger(self.args.log_filename, attrs=attrs)
+
+    def _get_value_attrs(self):
+        return ['train_loss', 'valid_loss', 'min_valid_loss']
+
+    def _create_checkpoint_saver(self):
+        return CheckpointSaver(self.args.output_checkpoint_dirname,
+                               step=self.args.checkpoint_save_step)
 
     def _create_pred_saver(self):
         step = [self.args.pred_epoch_step, self.args.pred_batch_step]
@@ -170,7 +198,7 @@ class ContentsBuilderDebug(ContentsBuilder):
         self._contents.register(self._valid_saver)
 
     def _create_printer(self):
-        attrs = self._contents.get_value_attrs()
+        attrs = self._get_value_attrs()
         return Printer(attrs=attrs)
 
     def _create_train_saver(self):

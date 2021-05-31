@@ -64,7 +64,7 @@ class TrainerBuilder:
             self.optim = Adam(self.model.parameters(),
                               lr=self.args.learning_rate)
         else:
-            raise NotImplementedError
+            raise notimplementederror
 
     def _create_loss_func(self):
         if self.args.loss_func.lower() == 'l1':
@@ -74,11 +74,15 @@ class TrainerBuilder:
 
     def _specify_outputs(self):
         Path(self.args.output_dir).mkdir(parents=True)
-        self.args.train_patch_dirname = str(Path(self.args.output_dir, 'train_patches'))
-        self.args.valid_patch_dirname = str(Path(self.args.output_dir, 'valid_patches'))
+        tp_dirname = str(Path(self.args.output_dir, 'train_patches'))
+        self.args.train_patch_dirname = tp_dirname
+        vp_dirname = str(Path(self.args.output_dir, 'valid_patches'))
+        self.args.valid_patch_dirname = vp_dirname
         self.args.log_filename = str(Path(self.args.output_dir, 'log.csv'))
         self.args.result_dirname = str(Path(self.args.output_dir, 'results'))
         self.args.config = str(Path(self.args.output_dir, 'config.json'))
+        cp_dirname = str(Path(self.args.output_dir, 'checkpoints'))
+        self.args.output_checkpoint_dirname = cp_dirname
 
     def _parse_image(self):
         obj = nib.load(self.args.image)
@@ -154,7 +158,7 @@ class Trainer:
         self._pred_batch_steps[0] = self.args.pred_batch_step
 
     def train(self):
-        self.contents = self.contents_builder.build().contents
+        self._build_contents()
         self.contents.start_observers()
         counter = self.contents.counter
         for i in counter['epoch']:
@@ -174,6 +178,16 @@ class Trainer:
             self.contents.set_value('valid_loss', float('nan'))
             self.contents.set_value('min_valid_loss', float('inf'))
         self.contents.close_observers()
+
+    def _build_contents(self):
+        self.contents = self.contents_builder.build().contents
+        if self.args.checkpoint:
+            print('Train from checkpoint', self.args.checkpoint)
+            assert Path(self.args.checkpoint).is_file()
+            checkpoint = torch.load(self.args.checkpoint)
+            self.contents.load_state_dicts(checkpoint)
+            self._pred = checkpoint['pred'].squeeze(0).squeeze(0)
+            self._voxel_size = checkpoint['voxel_size']
 
     def _build_sampler(self):
         self.sampler_builder.build(self._pred, self._voxel_size)
@@ -212,6 +226,7 @@ class Trainer:
     def _predict(self):
         self._pred = self.predictor.predict(self.contents.best_model)
         self.contents.set_tensor_cpu('pred', self._pred[None, None, ...], '')
+        self.contents.set_value('voxel_size', self._voxel_size)
 
     def _train_on_batch(self):
         batch_ind = self.contents.counter['batch'].index0
