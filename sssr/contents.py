@@ -64,6 +64,7 @@ class Contents(_Contents):
         self.set_value('train_loss', float('nan'))
         self.set_value('valid_loss', float('nan'))
         self.set_value('min_valid_loss', float('inf'))
+        self.set_value('min_valid_batch', float('nan'))
 
     def get_model_state_dict(self):
         return self.best_model.state_dict()
@@ -84,6 +85,8 @@ class Contents(_Contents):
         self.set_value('valid_loss', valid_loss)
         if valid_loss < self.get_value('min_valid_loss'):
             self.set_value('min_valid_loss', valid_loss)
+            batch_ind = self.counter['batch'].index1
+            self.set_value('min_valid_batch', batch_ind)
             self.best_model.load_state_dict(self.model.state_dict())
             self.best_optim_state = self.optim.state_dict()
 
@@ -173,7 +176,7 @@ class ContentsBuilder:
         return Logger(self.args.log_filename, attrs=attrs)
 
     def _get_value_attrs(self):
-        return ['train_loss', 'valid_loss', 'min_valid_loss']
+        return ['train_loss', 'valid_loss', 'min_valid_loss', 'min_valid_batch']
 
     def _create_checkpoint_saver(self):
         return CheckpointSaver(self.args.output_checkpoint_dirname,

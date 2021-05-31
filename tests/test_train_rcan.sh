@@ -17,8 +17,8 @@ kernel=$(echo $image | sed "s/\.nii\.gz$/.npy/")
 # following_num_batches=5
 
 num_epochs=2
-num_batches=10
-following_num_batches=5
+num_batches=500
+following_num_batches=200
 
 # num_epochs=1
 # num_batches=10
