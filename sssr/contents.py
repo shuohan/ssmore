@@ -99,13 +99,18 @@ class PredSaver(ImageSaver):
 
 
 class ContentsBuilder:
-    def __init__(self, model, optim, affine, header, nums_batches, args):
+    def __init__(self, model, optim, affine, header, args):
         self.model = model
         self.optim = optim
-        self.nums_batches = nums_batches
         self.args = args
-        self._contents = None
+        self._init_nums_batches()
         self._save_nii = SaveNifti(affine=affine, header=header)
+        self._contents = None
+
+    def _init_nums_batches(self):
+        self._nums_batches = [self.args.following_num_batches] \
+            * self.args.num_epochs
+        self._nums_batches[0] = self.args.num_batches
 
     @property
     def contents(self):
@@ -113,48 +118,62 @@ class ContentsBuilder:
 
     def build(self):
         epoch_counter = Counter('epoch', self.args.num_epochs)
-        batch_counter = BatchCounter('batch', self.nums_batches)
+        batch_counter = BatchCounter('batch', self._nums_batches)
         counter = Counters([epoch_counter, batch_counter])
         self._contents = Contents(self.model, self.optim, counter)
         self._set_observers()
         return self
 
-    def _set_observers(self):
-        attrs = self._contents.get_value_attrs()
-        printer = MultiTqdmPrinter(attrs=attrs)
-        logger = Logger(self.args.log_filename, attrs=attrs)
-        self._contents.register(printer)
-        self._contents.register(logger)
+    def update_pred_batch_step(self, step):
+        self._pred_saver.step[1] = step
 
-        step = (self.args.pred_epoch_step, float('inf'))
-        pred_saver = PredSaver(self.args.result_dirname, self._save_nii,
-                               attrs=['pred'], step=step, use_new_folder=False)
-        self._contents.register(pred_saver)
+    def _set_observers(self):
+        self._printer = self._create_printer()
+        self._logger = self._create_logger()
+        self._pred_saver = self._create_pred_saver()
+        self._contents.register(self._printer)
+        self._contents.register(self._logger)
+        self._contents.register(self._pred_saver)
+
+    def _create_printer(self):
+        attrs = self._contents.get_value_attrs()
+        return MultiTqdmPrinter(attrs=attrs)
+
+    def _create_logger(self):
+        attrs = self._contents.get_value_attrs()
+        return Logger(self.args.log_filename, attrs=attrs)
+
+    def _create_pred_saver(self):
+        step = [self.args.pred_epoch_step, self.args.pred_batch_step]
+        return PredSaver(self.args.result_dirname, self._save_nii,
+                         attrs=['pred'], step=step, use_new_folder=False)
 
 
 class ContentsBuilderDebug(ContentsBuilder):
-    def __init__(self, model, optim, affine, header, nums_batches, args):
-        super().__init__(model, optim, affine, header, nums_batches, args)
+    def __init__(self, model, optim, affine, header, args):
+        super().__init__(model, optim, affine, header, args)
         self._save_png = SavePngNorm(zoom=args.patch_save_zoom)
 
     def _set_observers(self):
-        attrs = self._contents.get_value_attrs()
-        printer = Printer(attrs=attrs)
-        logger = Logger(self.args.log_filename, attrs=attrs)
-        self._contents.register(printer)
-        self._contents.register(logger)
+        super()._set_observers()
+        self._train_saver = self._create_train_saver()
+        self._valid_saver = self._create_valid_saver()
+        self._contents.register(self._train_saver)
+        self._contents.register(self._valid_saver)
 
-        attrs = self._contents.get_tensor_attrs()
-        attrs = ['hr', 'blur', 'lr', 'lr_interp', 'output', 'hr_crop']
-        train_saver = PatchSaver(self.args.train_patch_dirname, self._save_png,
-                                 attrs=['train_' + a for a in attrs],
-                                 step=self.args.patch_save_step)
-        valid_saver = PatchSaver(self.args.valid_patch_dirname, self._save_png,
-                                 attrs=['valid_' + a for a in attrs],
-                                 step=self.args.patch_save_step)
-        step = (self.args.pred_epoch_step, self.args.pred_batch_step)
-        pred_saver = PredSaver(self.args.result_dirname, self._save_nii,
-                               attrs=['pred'], step=step, use_new_folder=False)
-        self._contents.register(train_saver)
-        self._contents.register(valid_saver)
-        self._contents.register(pred_saver)
+    def _create_printer(self):
+        attrs = self._contents.get_value_attrs()
+        return Printer(attrs=attrs)
+
+    def _create_train_saver(self):
+        attrs = ['train_' + a for a in self._get_patch_saver_attrs()]
+        return PatchSaver(self.args.train_patch_dirname, self._save_png,
+                          attrs=attrs, step=self.args.patch_save_step)
+
+    def _create_valid_saver(self):
+        attrs = ['valid_' + a for a in self._get_patch_saver_attrs()]
+        return PatchSaver(self.args.valid_patch_dirname, self._save_png,
+                          attrs=attrs, step=self.args.patch_save_step)
+
+    def _get_patch_saver_attrs(self):
+        return ['hr', 'blur', 'lr', 'lr_interp', 'output', 'hr_crop']

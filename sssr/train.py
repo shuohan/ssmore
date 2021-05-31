@@ -37,29 +37,19 @@ class TrainerBuilder:
         self._calc_hr_patch_size()
         self._specify_outputs()
         self._save_args()
-        self._build_contents()
         xyz = (self.args.x, self.args.y, self.args.z)
         predictor = Predictor(self._image, xyz, self.args.pred_batch_size)
         sampler_builder = SamplerBuilder(self.args.hr_patch_size, xyz)
+        contents_builder = self._create_contents_builder()
         self._trainer = Trainer(self._image, self._slice_profile,
-                                self.args.scale, self.args.voxel_size,
-                                sampler_builder, predictor,
-                                self.contents, self.loss_func,
-                                batch_size=self.args.batch_size,
-                                valid_step=self.args.valid_step,
-                                num_valid_samples=self.args.num_valid_samples,
-                                pred_batch_step=self.args.pred_batch_step)
+                                contents_builder, sampler_builder, predictor,
+                                self.loss_func, self.args)
         return self
 
-    def _build_contents(self):
-        nums_batches = self._calc_nums_batches()
-        if self.args.debug:
-            b = ContentsBuilderDebug(self.model, self.optim, self._out_affine,
-                                     self._out_header, nums_batches, self.args)
-        else:
-            b = ContentsBuilder(self.model, self.optim, self._out_affine,
-                                self._out_header, nums_batches, self.args)
-        self.contents = b.build().contents
+    def _create_contents_builder(self):
+        Builder = ContentsBuilderDebug if self.args.debug else ContentsBuilder
+        return Builder(self.model, self.optim, self._out_affine,
+                       self._out_header, self.args)
 
     def _create_model(self):
         if self.args.model.lower() == 'rcan':
@@ -89,9 +79,6 @@ class TrainerBuilder:
         self.args.log_filename = str(Path(self.args.output_dir, 'log.csv'))
         self.args.result_dirname = str(Path(self.args.output_dir, 'results'))
         self.args.config = str(Path(self.args.output_dir, 'config.json'))
-        # Path(self.args.train_patch_dirname).mkdir()
-        # Path(self.args.valid_patch_dirname).mkdir()
-        # Path(self.args.result_dirname).mkdir()
 
     def _parse_image(self):
         obj = nib.load(self.args.image)
@@ -145,36 +132,34 @@ class TrainerBuilder:
         with open(self.args.config, 'w') as jfile:
             json.dump(result, jfile, indent=4)
 
-    def _calc_nums_batches(self):
-        nums_batches = [self.args.following_num_batches] * self.args.num_epochs
-        nums_batches[0] = self.args.num_batches
-        return nums_batches
-
 
 class Trainer:
-    def __init__(self, image, slice_profile, scale, voxel_size, sampler_builder,
-                 predictor, contents, loss_func, batch_size=16, valid_step=100,
-                 num_valid_samples=100, pred_batch_step=1000):
+    def __init__(self, image, slice_profile, contents_builder, sampler_builder,
+                 predictor, loss_func, args):
         super().__init__()
         self.image = image
         self.slice_profile = slice_profile
-        self.scale = scale
-        self.voxel_size = voxel_size
-        self.contents = contents
         self.loss_func = loss_func
-        self.valid_step = valid_step
+        self.contents_builder = contents_builder
         self.sampler_builder = sampler_builder
         self.predictor = predictor
-        self.batch_size = batch_size
-        self.num_valid_samples = num_valid_samples
-        self.pred_batch_step = pred_batch_step
+        self.args = args
+        self._voxel_size = self.args.voxel_size
         self._pred = self.image
+        self._init_pred_batch_steps()
+
+    def _init_pred_batch_steps(self):
+        self._pred_batch_steps = [self.args.pred_following_batch_step] \
+            * self.args.num_epochs
+        self._pred_batch_steps[0] = self.args.pred_batch_step
 
     def train(self):
+        self.contents = self.contents_builder.build().contents
         self.contents.start_observers()
         counter = self.contents.counter
         for i in counter['epoch']:
             self._build_sampler()
+            self._update_pred_saver()
             for j in counter['batch']:
                 self._has_predicted = False
                 self._train_on_batch()
@@ -185,22 +170,26 @@ class Trainer:
                 self.contents.notify_observers()
             counter['batch'].update()
             self.contents.revert_to_best()
-            self.voxel_size = (min(self.voxel_size), ) * 3
+            self._voxel_size = (min(self._voxel_size), ) * 3
             self.contents.set_value('valid_loss', float('nan'))
             self.contents.set_value('min_valid_loss', float('inf'))
         self.contents.close_observers()
 
     def _build_sampler(self):
-        self.sampler_builder.build(self._pred, self.voxel_size)
+        self.sampler_builder.build(self._pred, self._voxel_size)
         self._train_sampler = self.sampler_builder.train_sampler
         self._valid_sampler = self.sampler_builder.valid_sampler
         self._valid_indices = self._select_valid_indices()
         self._train_indices = self._select_train_indices()
         self._valid_batch = self._valid_sampler.get_patches(self._valid_indices)
 
+    def _update_pred_saver(self):
+        pred_step = self._get_current_pred_batch_step()
+        self.contents_builder.update_pred_batch_step(pred_step)
+
     def _select_valid_indices(self):
         valid_indices = list()
-        num_valid_samples = self.num_valid_samples \
+        num_valid_samples = self.args.num_valid_samples \
             // self._valid_sampler.num_samplers
         for i, patches in enumerate(self._valid_sampler.patches.sub_patches):
             mask = calc_foreground_mask(patches.image)
@@ -217,7 +206,7 @@ class Trainer:
 
     def _select_train_indices(self):
         num_batches = self.contents.counter['batch'].num
-        num_indices = self.batch_size * num_batches
+        num_indices = self.args.batch_size * num_batches
         return self._train_sampler.sample_indices(num_indices)
 
     def _predict(self):
@@ -225,8 +214,9 @@ class Trainer:
         self.contents.set_tensor_cpu('pred', self._pred[None, None, ...], '')
 
     def _train_on_batch(self):
-        start_ind = (self.contents.counter['batch'].index - 1) * self.batch_size
-        stop_ind = start_ind + self.batch_size
+        batch_ind = self.contents.counter['batch'].index - 1
+        start_ind = batch_ind * self.args.batch_size
+        stop_ind = start_ind + self.args.batch_size
         indices = self._train_indices[start_ind : stop_ind]
         batch = self._train_sampler.get_patches(indices)
 
@@ -242,10 +232,10 @@ class Trainer:
 
     def _apply_model(self, batch, prefix=''):
         blur = F.conv2d(batch.data, self.slice_profile)
-        lr = resize(blur, (self.scale, 1), order=3)
+        lr = resize(blur, (self.args.scale, 1), order=3)
         output = self.contents.model(lr)
         hr_crop = self._crop_hr(batch.data, output.shape[2:])
-        lr_interp = resize(lr, (1 / self.scale, 1), order=3,
+        lr_interp = resize(lr, (1 / self.args.scale, 1), order=3,
                            target_shape=output.shape[2:])
 
         name = batch.name
@@ -264,15 +254,19 @@ class Trainer:
 
     def _needs_to_validate(self):
         counter = self.contents.counter['batch']
-        rule1 = counter.index % self.valid_step == 0
+        rule1 = counter.index % self.args.valid_step == 0
         rule2 = counter.has_reached_end()
         return rule1 or rule2
 
     def _needs_to_predict(self):
         counter = self.contents.counter['batch']
-        rule1 = counter.index % self.pred_batch_step == 0
+        rule1 = counter.index % self._get_current_pred_batch_step() == 0
         rule2 = counter.has_reached_end()
         return rule1 or rule2
+
+    def _get_current_pred_batch_step(self):
+        epoch_ind = self.contents.counter['epoch'].index - 1
+        return self._pred_batch_steps[epoch_ind]
 
     def _valid_on_batch(self):
         self.contents.model.eval()

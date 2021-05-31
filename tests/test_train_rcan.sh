@@ -12,9 +12,9 @@ type=scale-4p9_fwhm-6p125
 image=/data/smore_simu_same_fov/simu_data/${type}/sub-OAS30167_ses-d0111_T1w_initnorm_${type}.nii.gz
 kernel=$(echo $image | sed "s/\.nii\.gz$/.npy/")
 
-num_epochs=20
-num_batches=20000
-following_num_batches=1000
+num_epochs=5
+num_batches=300
+following_num_batches=30
 # num_epochs=1
 # num_batches=10
 # following_num_batches=1
@@ -27,7 +27,8 @@ num_channels=64
 num_blocks=8
 num_groups=2
 pred_epoch_step=1
-pred_batch_step=1000
+pred_batch_step=100
+pred_following_batch_step=10
 
 name=$(basename $image | sed "s/\.nii\.gz$//")
 output_dir=results_rcan_${name}_ne${num_epochs}_nb${num_batches}_bs${batch_size}_nf${following_num_batches}_nc${num_channels}_nb${num_blocks}_ng${num_groups}_lr${learning_rate}
@@ -36,4 +37,5 @@ rm -rf $output_dir
     -S $save_step -B $batch_size -d ${num_blocks} -w ${num_channels} \
     -g $num_groups -l $learning_rate -b $num_batches \
     -f $following_num_batches -E $pred_epoch_step -s $kernel \
-    -P $pred_batch_step -p ${patch_size} ${patch_size}
+    -P $pred_batch_step -p ${patch_size} ${patch_size} \
+    -F ${pred_following_batch_step}
