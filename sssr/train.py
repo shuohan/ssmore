@@ -177,6 +177,7 @@ class Trainer:
             self._voxel_size = (min(self._voxel_size), ) * 3
             self.contents.set_value('valid_loss', float('nan'))
             self.contents.set_value('min_valid_loss', float('inf'))
+            self.contents.set_value('min_valid_batch', float('nan'))
         self.contents.close_observers()
 
     def _build_contents(self):

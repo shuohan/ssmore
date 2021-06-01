@@ -22,7 +22,7 @@ parser.add_argument('-f', '--following-num-batches', default=100, type=int)
 parser.add_argument('-O', '--optim', default='adam')
 parser.add_argument('-L', '--loss-func', default='l1')
 parser.add_argument('-m', '--model', default='rcan')
-parser.add_argument('-v', '--valid-step', type=int, default=100)
+parser.add_argument('-v', '--valid-step', type=int, default=float('inf'))
 parser.add_argument('-V', '--num-valid-samples', type=int, default=128)
 parser.add_argument('-P', '--pred-batch-step', type=int, default=float('inf'))
 parser.add_argument('-F', '--pred-following-batch-step', type=int,
