@@ -16,8 +16,8 @@ kernel=$(echo $image | sed "s/\.nii\.gz$/.npy/")
 # num_batches=5
 # following_num_batches=5
 
-num_epochs=2
-num_batches=500
+num_epochs=1
+num_batches=10000
 following_num_batches=200
 
 # num_epochs=1
@@ -27,20 +27,22 @@ following_num_batches=200
 patch_size=32
 save_step=1000
 batch_size=16
-learning_rate=1e-4
+learning_rate=2e-4
 num_channels=64
 num_blocks=8
 num_groups=2
 pred_epoch_step=1
-pred_batch_step=100
+pred_batch_step=1000
 pred_following_batch_step=10
+valid_step=100
 
 name=$(basename $image | sed "s/\.nii\.gz$//")
-output_dir=results_rcan_${name}_ne${num_epochs}_nb${num_batches}_bs${batch_size}_nf${following_num_batches}_nc${num_channels}_nb${num_blocks}_ng${num_groups}_lr${learning_rate}
+# output_dir=results_rcan_${name}_ne${num_epochs}_nb${num_batches}_bs${batch_size}_nf${following_num_batches}_nc${num_channels}_nb${num_blocks}_ng${num_groups}_lr${learning_rate}
+output_dir=lr_sch
 rm -rf $output_dir
 ../scripts/train.py -i $image -o $output_dir -e $num_epochs \
     -S $save_step -B $batch_size -d ${num_blocks} -w ${num_channels} \
     -g $num_groups -l $learning_rate -b $num_batches \
     -f $following_num_batches -E $pred_epoch_step -s $kernel \
     -P $pred_batch_step -p ${patch_size} ${patch_size} \
-    -F ${pred_following_batch_step} -D -C 1
+    -F ${pred_following_batch_step} -D -C 1 -v $valid_step

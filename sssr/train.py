@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.optim import Adam
+from torch.optim.lr_scheduler import OneCycleLR
 from torch.nn import L1Loss
 from pathlib import Path
 from scipy.signal.windows import gaussian
@@ -164,9 +165,12 @@ class Trainer:
         for i in counter['epoch']:
             self._build_sampler()
             self._update_pred_saver()
+            lr_sch = OneCycleLR(self.contents.optim, 5e-4, counter['batch'].num)
             for j in counter['batch']:
                 self._has_predicted = False
                 self._train_on_batch()
+                self.contents.set_value('lr', lr_sch.get_last_lr()[0])
+                lr_sch.step()
                 if self._needs_to_validate():
                     self._valid_on_batch()
                 if self._needs_to_predict():
