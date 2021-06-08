@@ -165,7 +165,7 @@ class Trainer:
         for i in counter['epoch']:
             self._build_sampler()
             self._update_pred_saver()
-            lr_sch = OneCycleLR(self.contents.optim, 5e-4, counter['batch'].num)
+            lr_sch = OneCycleLR(self.contents.optim, 1e-4, counter['batch'].num)
             for j in counter['batch']:
                 self._has_predicted = False
                 self._train_on_batch()

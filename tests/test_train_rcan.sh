@@ -38,7 +38,7 @@ valid_step=100
 
 name=$(basename $image | sed "s/\.nii\.gz$//")
 # output_dir=results_rcan_${name}_ne${num_epochs}_nb${num_batches}_bs${batch_size}_nf${following_num_batches}_nc${num_channels}_nb${num_blocks}_ng${num_groups}_lr${learning_rate}
-output_dir=lr_sch
+output_dir=lr_sch_max-lr-1e-4
 rm -rf $output_dir
 ../scripts/train.py -i $image -o $output_dir -e $num_epochs \
     -S $save_step -B $batch_size -d ${num_blocks} -w ${num_channels} \
