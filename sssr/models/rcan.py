@@ -101,8 +101,6 @@ class RCAN(nn.Module):
         self.num_channels = num_channels
         self.reduction = reduction
         self.scale = scale
-        self._scale1 = int(self.scale)
-        self._scale0 = self.scale / float(self._scale1)
 
         kernel_size = 3
         act = nn.ReLU(True)
@@ -116,7 +114,7 @@ class RCAN(nn.Module):
 
         self.conv1 = nn.Conv2d(num_channels, num_channels, kernel_size,
                                padding=padding)
-        self.up = Upsample(num_channels, self._scale1, use_padding=True)
+        self.up = Upsample(num_channels, self.scale, use_padding=True)
         self.conv2 = nn.Conv2d(num_channels, 1, 1)
 
     def calc_out_patch_size(self, input_patch_size):
@@ -127,7 +125,6 @@ class RCAN(nn.Module):
         return patch_size
 
     def forward(self, x):
-        x = resize(x, (1 / self._scale0, 1), order=3)
         x = self.conv0(x)
         res = x
         for i in range(self.num_rg):

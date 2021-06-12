@@ -6,6 +6,7 @@ This code is modified from
 
 """
 from torch import nn
+from resize.pytorch import resize
 
 from .utils import pixel_shuffle
 
@@ -30,17 +31,21 @@ class ResBlock(nn.Module):
 class Upsample(nn.Module):
     def __init__(self, num_channels, scale, use_padding=False):
         super().__init__()
-        self.num_channels = num_channels
         self.scale = scale
+        self._scale1 = int(self.scale)
+        self._scale0 = self.scale / float(self._scale1)
+
+        self.num_channels = num_channels
         self.use_padding = use_padding
 
         padding = 1 if use_padding else 0
-        self.conv0 = nn.Conv2d(num_channels, scale * num_channels, 3,
+        self.conv0 = nn.Conv2d(num_channels, self._scale1 * num_channels, 3,
                                padding=padding)
 
     def forward(self, x):
+        x = resize(x, (1 / self._scale0, 1), order=1)
         out = self.conv0(x)
-        out = pixel_shuffle(out, self.scale)
+        out = pixel_shuffle(out, self._scale1)
         return out
 
 
