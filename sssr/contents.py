@@ -202,7 +202,8 @@ class ContentsBuilderDebug(ContentsBuilder):
 
     def _create_printer(self):
         attrs = self._get_value_attrs()
-        return Printer(attrs=attrs)
+        # return Printer(attrs=attrs)
+        return MultiTqdmPrinter(attrs=attrs)
 
     def _create_train_saver(self):
         attrs = ['train_' + a for a in self._get_patch_saver_attrs()]
