@@ -113,6 +113,8 @@ class TrainerBuilder:
             slice_profile = self._calc_gaussian_slice_profile()
         else:
             slice_profile = np.load(self.args.slice_profile)
+        if len(slice_profile) == 1:
+            slice_profile = np.pad(slice_profile, 1)
         self.args.slice_profile_values = slice_profile.astype(float).tolist()
         slice_profile = slice_profile.squeeze()[None, None, :, None]
         self._slice_profile = torch.tensor(slice_profile).float().cuda()
