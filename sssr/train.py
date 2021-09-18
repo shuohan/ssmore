@@ -73,7 +73,7 @@ class TrainerBuilder:
             raise NotImplementedError
 
     def _specify_outputs(self):
-        Path(self.args.output_dir).mkdir(parents=True)
+        Path(self.args.output_dir).mkdir(exist_ok=True, parents=True)
         tp_dirname = str(Path(self.args.output_dir, 'train_patches'))
         self.args.train_patch_dirname = tp_dirname
         vp_dirname = str(Path(self.args.output_dir, 'valid_patches'))

@@ -161,11 +161,9 @@ class ContentsBuilder:
         self._printer = self._create_printer()
         self._logger = self._create_logger()
         self._pred_saver = self._create_pred_saver()
-        self._cp_saver = self._create_checkpoint_saver()
         self._contents.register(self._printer)
         self._contents.register(self._logger)
         self._contents.register(self._pred_saver)
-        self._contents.register(self._cp_saver)
 
     def _create_printer(self):
         attrs = self._get_value_attrs()
@@ -199,6 +197,8 @@ class ContentsBuilderDebug(ContentsBuilder):
         self._valid_saver = self._create_valid_saver()
         self._contents.register(self._train_saver)
         self._contents.register(self._valid_saver)
+        self._cp_saver = self._create_checkpoint_saver()
+        self._contents.register(self._cp_saver)
 
     def _create_printer(self):
         attrs = self._get_value_attrs()
