@@ -59,6 +59,10 @@ class TrainerBuilder:
         else:
             raise NotImplementedError
 
+        Path(self.args.output_dir).mkdir(exist_ok=True, parents=True)
+        with open(Path(self.args.output_dir, 'arch.txt'), 'w') as f:
+            f.write(self.model.__str__())
+
     def _create_optim(self):
         if self.args.optim.lower() == 'adam':
             self.optim = Adam(self.model.parameters(),
@@ -89,7 +93,8 @@ class TrainerBuilder:
         self.args.voxel_size = tuple(float(v) for v in obj.header.get_zooms())
         self._image = obj.get_fdata(dtype=np.float32)
         self._get_axis_order()
-        self.args.scale = float(self.args.voxel_size[self.args.z])
+        self.args.scale = float(self.args.voxel_size[self.args.z] \
+            / self.args.voxel_size[self.args.x])
         self._calc_output_affine(obj.affine)
         self._out_header = obj.header
 
