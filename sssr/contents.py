@@ -88,7 +88,7 @@ class Contents(_Contents):
             batch_ind = self.counter['batch'].index1
             self.set_value('min_valid_batch', batch_ind)
             self.best_model.load_state_dict(self.model.state_dict())
-            self.best_optim_state = self.optim.state_dict()
+            self.best_optim_state = deepcopy(self.optim.state_dict())
 
     def revert_to_best(self):
         self.model.load_state_dict(self.best_model.state_dict())
