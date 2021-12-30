@@ -215,7 +215,8 @@ class Trainer:
         num_valid_samples = self.args.num_valid_samples \
             // self._valid_sampler.num_samplers
         for i, patches in enumerate(self._valid_sampler.patches.sub_patches):
-            mask = calc_foreground_mask(patches.image)
+            # NOTE: it seems that torch cannot handle too many voxels
+            mask = calc_foreground_mask(patches.image).double()
             flat_mask = SampleWeights(patches, (mask, )).weights_flat
             mapping = torch.where(flat_mask > 0)[0].cpu().numpy()
             indices = np.linspace(0, len(mapping) - 1, num_valid_samples)
