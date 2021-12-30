@@ -59,6 +59,10 @@ class TrainerBuilder:
         else:
             raise NotImplementedError
 
+        Path(self.args.output_dir).mkdir(exist_ok=True, parents=True)
+        with open(Path(self.args.output_dir, 'arch.txt'), 'w') as f:
+            f.write(self.model.__str__())
+
     def _create_optim(self):
         if self.args.optim.lower() == 'adam':
             self.optim = Adam(self.model.parameters(),
@@ -73,7 +77,7 @@ class TrainerBuilder:
             raise NotImplementedError
 
     def _specify_outputs(self):
-        Path(self.args.output_dir).mkdir(parents=True)
+        Path(self.args.output_dir).mkdir(exist_ok=True, parents=True)
         tp_dirname = str(Path(self.args.output_dir, 'train_patches'))
         self.args.train_patch_dirname = tp_dirname
         vp_dirname = str(Path(self.args.output_dir, 'valid_patches'))
@@ -89,7 +93,8 @@ class TrainerBuilder:
         self.args.voxel_size = tuple(float(v) for v in obj.header.get_zooms())
         self._image = obj.get_fdata(dtype=np.float32)
         self._get_axis_order()
-        self.args.scale = float(self.args.voxel_size[self.args.z])
+        self.args.scale = float(self.args.voxel_size[self.args.z] \
+            / self.args.voxel_size[self.args.x])
         self._calc_output_affine(obj.affine)
         self._out_header = obj.header
 
@@ -113,6 +118,8 @@ class TrainerBuilder:
             slice_profile = self._calc_gaussian_slice_profile()
         else:
             slice_profile = np.load(self.args.slice_profile)
+        if len(slice_profile) == 1:
+            slice_profile = np.pad(slice_profile, 1)
         self.args.slice_profile_values = slice_profile.astype(float).tolist()
         slice_profile = slice_profile.squeeze()[None, None, :, None]
         self._slice_profile = torch.tensor(slice_profile).float().cuda()
@@ -208,7 +215,8 @@ class Trainer:
         num_valid_samples = self.args.num_valid_samples \
             // self._valid_sampler.num_samplers
         for i, patches in enumerate(self._valid_sampler.patches.sub_patches):
-            mask = calc_foreground_mask(patches.image)
+            # NOTE: it seems that torch cannot handle too many voxels
+            mask = calc_foreground_mask(patches.image).double()
             flat_mask = SampleWeights(patches, (mask, )).weights_flat
             mapping = torch.where(flat_mask > 0)[0].cpu().numpy()
             indices = np.linspace(0, len(mapping) - 1, num_valid_samples)

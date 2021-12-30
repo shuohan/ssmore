@@ -88,7 +88,7 @@ class Contents(_Contents):
             batch_ind = self.counter['batch'].index1
             self.set_value('min_valid_batch', batch_ind)
             self.best_model.load_state_dict(self.model.state_dict())
-            self.best_optim_state = self.optim.state_dict()
+            self.best_optim_state = deepcopy(self.optim.state_dict())
 
     def revert_to_best(self):
         self.model.load_state_dict(self.best_model.state_dict())
@@ -161,11 +161,9 @@ class ContentsBuilder:
         self._printer = self._create_printer()
         self._logger = self._create_logger()
         self._pred_saver = self._create_pred_saver()
-        self._cp_saver = self._create_checkpoint_saver()
         self._contents.register(self._printer)
         self._contents.register(self._logger)
         self._contents.register(self._pred_saver)
-        self._contents.register(self._cp_saver)
 
     def _create_printer(self):
         attrs = self._get_value_attrs()
@@ -199,10 +197,13 @@ class ContentsBuilderDebug(ContentsBuilder):
         self._valid_saver = self._create_valid_saver()
         self._contents.register(self._train_saver)
         self._contents.register(self._valid_saver)
+        self._cp_saver = self._create_checkpoint_saver()
+        self._contents.register(self._cp_saver)
 
     def _create_printer(self):
         attrs = self._get_value_attrs()
-        return Printer(attrs=attrs)
+        # return Printer(attrs=attrs)
+        return MultiTqdmPrinter(attrs=attrs)
 
     def _create_train_saver(self):
         attrs = ['train_' + a for a in self._get_patch_saver_attrs()]

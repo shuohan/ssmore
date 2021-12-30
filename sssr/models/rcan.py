@@ -117,7 +117,8 @@ class RCAN(nn.Module):
         self.conv1 = nn.Conv2d(num_channels, num_channels, kernel_size,
                                padding=padding)
         self.up = Upsample(num_channels, self._scale1, use_padding=True)
-        self.conv2 = nn.Conv2d(num_channels, 1, 1)
+        # self.rg_out = RG(2, num_channels, kernel_size, reduction)
+        self.conv_out = nn.Conv2d(num_channels, 1, 1)
 
     def calc_out_patch_size(self, input_patch_size):
         x = torch.rand([1, 1] + input_patch_size).float()
@@ -135,5 +136,6 @@ class RCAN(nn.Module):
         res = self.conv1(res)
         out = res + x
         out = self.up(out)
-        out = self.conv2(out)
+        # out = self.rg_out(out)
+        out = self.conv_out(out)
         return out
