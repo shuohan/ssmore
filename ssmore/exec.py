@@ -8,8 +8,8 @@ def train(args=None):
     args = sys.argv[1:] if args is None else args
     desc = 'Self-supervised super-resolution.'
     parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument('-i', '--image')
-    parser.add_argument('-o', '--output-dir')
+    parser.add_argument('-i', '--image', required=True)
+    parser.add_argument('-o', '--output-dir', required=True)
     parser.add_argument('-p', '--patch-size', default=[32, 32], type=int, nargs=2)
     parser.add_argument('-s', '--slice-profile', default='gaussian')
     parser.add_argument('-d', '--num-blocks', default=8, type=int)
