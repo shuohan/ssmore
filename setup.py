@@ -13,7 +13,11 @@ setup(name='ssmore',
       packages=find_packages(),
       license='GPLv3',
       python_requires='>=3.7.10',
-      scripts=['scripts/train.py'],
+      entry_points={
+          'console_scripts': [
+              'ssmore-train=ssmore.exec:train'
+          ]
+      },
       long_description=long_desc,
       install_requires=[
           'torch>=1.8.1',
