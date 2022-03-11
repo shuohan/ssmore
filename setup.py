@@ -15,7 +15,7 @@ setup(name='ssmore',
       python_requires='>=3.7.10',
       entry_points={
           'console_scripts': [
-              'ssmore-train=ssmore.exec:train'
+              'ssmore-train=ssmore.exec:train',
           ]
       },
       long_description=long_desc,
@@ -35,5 +35,5 @@ setup(name='ssmore',
           'Programming Language :: Python :: 3',
           'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
           'Operating System :: OS Independent'
-      ]
-     )
+      ],
+      )
