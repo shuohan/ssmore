@@ -6,6 +6,6 @@ RUN pip install scipy==1.6.3 \
         tqdm==4.51.0 \
         improc3d==0.5.2 \
         scikit-image==0.18.1 \
-        git+https://github.com/shuohan/sssr@0.1.0
+        git+https://github.com/shuohan/ssmore
 ENV MPLCONFIGDIR=/tmp/matplotlib
 CMD ["bash"]
