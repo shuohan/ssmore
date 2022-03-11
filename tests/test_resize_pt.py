@@ -2,9 +2,9 @@
 
 import torch
 import numpy as np
-from sssr.resize import _calc_old_fov_no_extra, _calc_new_fov_no_extra
-from sssr.resize import _calc_new_shape_no_extra, resize_pt
-from sssr.resize import _calc_sampling_indices_no_extra_pt
+from ssmore.resize import _calc_old_fov_no_extra, _calc_new_fov_no_extra
+from ssmore.resize import _calc_new_shape_no_extra, resize_pt
+from ssmore.resize import _calc_sampling_indices_no_extra_pt
 
 
 def test_resize_pt():

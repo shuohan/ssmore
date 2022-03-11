@@ -1,6 +1,7 @@
 #!/usr/bin/env python
-
 import argparse
+
+from ssmore.train import TrainerBuilder
 
 
 desc = 'Self-supervised super-resolution.'
@@ -34,8 +35,6 @@ parser.add_argument('-c', '--checkpoint')
 parser.add_argument('-C', '--checkpoint-save-step', type=int, default=1)
 args = parser.parse_args()
 
-
-from sssr.train import TrainerBuilder
 
 if args.set_random_seed:
     import torch

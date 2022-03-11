@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import torch
-from sssr.edsr import EDSR, Upsample
+from ssmore.edsr import EDSR, Upsample
 from pytorchviz import make_dot
 from pathlib import Path
 

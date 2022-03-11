@@ -5,7 +5,7 @@ version = '0.2.2-dev'
 with open('README.md') as readme:
     long_desc = readme.read()
 
-setup(name='sssr',
+setup(name='ssmore',
       description='Self-supervised super-resolution',
       author='Shuo Han',
       author_email='shan50@jhu.edu',
@@ -26,7 +26,7 @@ setup(name='sssr',
           'sssrlib@git+https://github.com/shuohan/sssrlib@0.3.0'
       ],
       long_description_content_type='text/markdown',
-      url='https://github.com/shuohan/sssr',
+      url='https://github.com/shuohan/ssmore',
       classifiers=[
           'Programming Language :: Python :: 3',
           'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
