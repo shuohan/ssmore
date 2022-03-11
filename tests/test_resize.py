@@ -4,8 +4,8 @@ import os
 import numpy as np
 import nibabel as nib
 
-from sssr.resize import _calc_old_fov, _calc_new_fov, _calc_new_shape
-from sssr.resize import _calc_sampling_indices, resize
+from ssmore.resize import _calc_old_fov, _calc_new_fov, _calc_new_shape
+from ssmore.resize import _calc_sampling_indices, resize
 
 
 def test_mid():

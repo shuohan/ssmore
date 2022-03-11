@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import torch
-from sssr.models.rcan import RCAN
+from ssmore.models.rcan import RCAN
 from pytorchviz import make_dot
 from pathlib import Path
 

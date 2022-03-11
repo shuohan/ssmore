@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import torch
-from sssr.wdsr import WDSRB
+from ssmore.wdsr import WDSRB
 from pytorchviz import make_dot
 from pathlib import Path
 from collections import namedtuple
