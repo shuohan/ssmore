@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-version = '0.2.2'
+version = '0.2.3'
 
 with open('README.md') as readme:
     long_desc = readme.read()
@@ -25,7 +25,7 @@ setup(name='ssmore',
           'numpy',
           'scipy',
           'nibabel',
-          'resize@git+https://github.com/shuohan/resize@0.1.1',
+          'resize@git+https://github.com/shuohan/resize@0.1.3',
           'ptxl@git+https://gitlab.com/shan-deep-networks/ptxl@0.3.2',
           'sssrlib@git+https://github.com/shuohan/sssrlib@0.3.0'
       ],
